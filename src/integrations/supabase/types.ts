@@ -14,7 +14,98 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      evaluations: {
+        Row: {
+          ai_feedback: Json | null
+          audio_url: string | null
+          conversation_text: string | null
+          created_at: string
+          date: string
+          final_score: number
+          id: string
+          lead_responses: string[]
+          objections: Json
+          questions_asked: string[]
+          result: Database["public"]["Enums"]["prospection_result"]
+          scores: Json
+          sdr_id: string
+          type: Database["public"]["Enums"]["prospection_type"]
+          updated_at: string
+        }
+        Insert: {
+          ai_feedback?: Json | null
+          audio_url?: string | null
+          conversation_text?: string | null
+          created_at?: string
+          date?: string
+          final_score?: number
+          id?: string
+          lead_responses?: string[]
+          objections?: Json
+          questions_asked?: string[]
+          result: Database["public"]["Enums"]["prospection_result"]
+          scores?: Json
+          sdr_id: string
+          type: Database["public"]["Enums"]["prospection_type"]
+          updated_at?: string
+        }
+        Update: {
+          ai_feedback?: Json | null
+          audio_url?: string | null
+          conversation_text?: string | null
+          created_at?: string
+          date?: string
+          final_score?: number
+          id?: string
+          lead_responses?: string[]
+          objections?: Json
+          questions_asked?: string[]
+          result?: Database["public"]["Enums"]["prospection_result"]
+          scores?: Json
+          sdr_id?: string
+          type?: Database["public"]["Enums"]["prospection_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluations_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdrs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdrs: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          id: string
+          name: string
+          role: string
+          squad: Database["public"]["Enums"]["squad_type"]
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          role: string
+          squad: Database["public"]["Enums"]["squad_type"]
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          role?: string
+          squad?: Database["public"]["Enums"]["squad_type"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +114,9 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      prospection_result: "prosseguiu" | "recusou" | "perdeu_interesse"
+      prospection_type: "Ligação" | "WhatsApp"
+      squad_type: "Águia" | "Lobo"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +243,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      prospection_result: ["prosseguiu", "recusou", "perdeu_interesse"],
+      prospection_type: ["Ligação", "WhatsApp"],
+      squad_type: ["Águia", "Lobo"],
+    },
   },
 } as const

@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode } from 'react';
 import { SDR, Evaluation } from '@/types';
-import { mockSDRs, mockEvaluations } from '@/data/mockData';
+import { useSDRs, useAddSDR, useUpdateSDR, useDeleteSDR } from '@/hooks/useSDRs';
+import { useEvaluations, useAddEvaluation, useUpdateEvaluation, useDeleteEvaluation } from '@/hooks/useEvaluations';
 
 interface AppContextType {
   sdrs: SDR[];
   evaluations: Evaluation[];
+  isLoading: boolean;
   addSDR: (sdr: Omit<SDR, 'id' | 'createdAt'>) => void;
   updateSDR: (id: string, data: Partial<SDR>) => void;
   deleteSDR: (id: string) => void;
@@ -16,47 +18,46 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [sdrs, setSDRs] = useState<SDR[]>(mockSDRs);
-  const [evaluations, setEvaluations] = useState<Evaluation[]>(mockEvaluations);
+  const { data: sdrs = [], isLoading: loadingSDRs } = useSDRs();
+  const { data: evaluations = [], isLoading: loadingEvaluations } = useEvaluations();
+  
+  const addSDRMutation = useAddSDR();
+  const updateSDRMutation = useUpdateSDR();
+  const deleteSDRMutation = useDeleteSDR();
+  
+  const addEvaluationMutation = useAddEvaluation();
+  const updateEvaluationMutation = useUpdateEvaluation();
+  const deleteEvaluationMutation = useDeleteEvaluation();
 
   const addSDR = (sdrData: Omit<SDR, 'id' | 'createdAt'>) => {
-    const newSDR: SDR = {
-      ...sdrData,
-      id: String(Date.now()),
-      createdAt: new Date(),
-    };
-    setSDRs(prev => [...prev, newSDR]);
+    addSDRMutation.mutate(sdrData);
   };
 
   const updateSDR = (id: string, data: Partial<SDR>) => {
-    setSDRs(prev => prev.map(sdr => sdr.id === id ? { ...sdr, ...data } : sdr));
+    updateSDRMutation.mutate({ id, data });
   };
 
   const deleteSDR = (id: string) => {
-    setSDRs(prev => prev.filter(sdr => sdr.id !== id));
+    deleteSDRMutation.mutate(id);
   };
 
   const addEvaluation = (evaluationData: Omit<Evaluation, 'id' | 'createdAt'>) => {
-    const newEvaluation: Evaluation = {
-      ...evaluationData,
-      id: String(Date.now()),
-      createdAt: new Date(),
-    };
-    setEvaluations(prev => [...prev, newEvaluation]);
+    addEvaluationMutation.mutate(evaluationData);
   };
 
   const updateEvaluation = (id: string, data: Partial<Evaluation>) => {
-    setEvaluations(prev => prev.map(e => e.id === id ? { ...e, ...data } : e));
+    updateEvaluationMutation.mutate({ id, data });
   };
 
   const deleteEvaluation = (id: string) => {
-    setEvaluations(prev => prev.filter(e => e.id !== id));
+    deleteEvaluationMutation.mutate(id);
   };
 
   return (
     <AppContext.Provider value={{
       sdrs,
       evaluations,
+      isLoading: loadingSDRs || loadingEvaluations,
       addSDR,
       updateSDR,
       deleteSDR,
