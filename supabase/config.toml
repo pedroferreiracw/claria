@@ -1,1 +1,4 @@
 project_id = "zuluogrlwqehvhxpqjok"
+
+[functions.analyze-prospection]
+verify_jwt = false
