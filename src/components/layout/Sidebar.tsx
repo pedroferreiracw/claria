@@ -6,11 +6,14 @@ import {
   FileSpreadsheet,
   ChevronLeft,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -22,6 +25,12 @@ const menuItems = [
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { user, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+    toast.success('Logout realizado com sucesso!');
+  };
 
   return (
     <aside 
@@ -70,8 +79,22 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Collapse Button */}
-        <div className="p-3 border-t border-border/50">
+        {/* User & Actions */}
+        <div className="p-3 border-t border-border/50 space-y-2">
+          {user && !collapsed && (
+            <div className="px-3 py-2 text-xs text-muted-foreground truncate">
+              {user.email}
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className={cn("w-full text-destructive hover:text-destructive hover:bg-destructive/10", collapsed ? "justify-center" : "justify-start")}
+          >
+            <LogOut className="h-4 w-4" />
+            {!collapsed && <span className="ml-2">Sair</span>}
+          </Button>
           <Button
             variant="ghost"
             size="sm"
