@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -17,10 +17,14 @@ import {
   Sparkles,
   Loader2,
   CheckCircle,
-  XCircle
+  XCircle,
+  Upload,
+  FileAudio,
+  X
 } from 'lucide-react';
 import { ProspectionType, ProspectionResult, Scores, Evaluation, calculateFinalScore, getScoreColor } from '@/types';
 import { useAIAnalysis, AIAnalysisResult } from '@/hooks/useAIAnalysis';
+import { useAudioTranscription } from '@/hooks/useAudioTranscription';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -40,6 +44,9 @@ const scoreLabels: Record<keyof Scores, string> = {
 export default function EvaluationsPage() {
   const { sdrs, evaluations, addEvaluation } = useApp();
   const { isAnalyzing, analyzeProspection, resetAnalysis } = useAIAnalysis();
+  const { isTranscribing, transcribeAudio, resetTranscription } = useAudioTranscription();
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [viewingEvaluation, setViewingEvaluation] = useState<Evaluation | null>(null);
@@ -49,6 +56,7 @@ export default function EvaluationsPage() {
   const [prospectionType, setProspectionType] = useState<ProspectionType | ''>('');
   const [conversationText, setConversationText] = useState('');
   const [analysisResult, setAnalysisResult] = useState<AIAnalysisResult | null>(null);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
 
   const handleAnalyze = async () => {
     if (!sdrId) {
@@ -59,16 +67,61 @@ export default function EvaluationsPage() {
       toast.error('Selecione o tipo de prospecção');
       return;
     }
-    if (!conversationText.trim()) {
-      toast.error('Cole o texto da conversa');
+    
+    let textToAnalyze = conversationText;
+    
+    // If it's a call and we have an audio file, transcribe first
+    if (prospectionType === 'Ligação' && audioFile && !conversationText.trim()) {
+      const transcription = await transcribeAudio(audioFile);
+      if (!transcription) {
+        return; // Error already shown by hook
+      }
+      textToAnalyze = transcription;
+      setConversationText(transcription);
+    }
+    
+    if (!textToAnalyze.trim()) {
+      toast.error(prospectionType === 'Ligação' 
+        ? 'Faça upload do áudio ou cole a transcrição' 
+        : 'Cole o texto da conversa');
       return;
     }
 
-    const result = await analyzeProspection(conversationText, prospectionType);
+    const result = await analyzeProspection(textToAnalyze, prospectionType);
     if (result) {
       setAnalysisResult(result);
       setCurrentStep('review');
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/x-wav', 'audio/m4a', 'audio/mp4', 'audio/x-m4a', 'audio/webm', 'audio/ogg', 'audio/flac'];
+      if (!validTypes.includes(file.type)) {
+        toast.error('Formato inválido. Use MP3, WAV, M4A, WebM, OGG ou FLAC');
+        return;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        toast.error('Arquivo muito grande. Máximo: 25MB');
+        return;
+      }
+      setAudioFile(file);
+      setConversationText(''); // Clear text when audio is uploaded
+    }
+  };
+
+  const removeAudioFile = () => {
+    setAudioFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   const handleSave = () => {
@@ -100,8 +153,13 @@ export default function EvaluationsPage() {
     setProspectionType('');
     setConversationText('');
     setAnalysisResult(null);
+    setAudioFile(null);
     setCurrentStep('input');
     resetAnalysis();
+    resetTranscription();
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
     setIsDialogOpen(false);
   };
 
@@ -188,13 +246,79 @@ export default function EvaluationsPage() {
                     </div>
                   </div>
 
+                  {/* Audio Upload for Ligação */}
+                  {prospectionType === 'Ligação' && (
+                    <div className="space-y-2">
+                      <Label>Áudio da Ligação</Label>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".mp3,.wav,.m4a,.webm,.ogg,.flac,audio/*"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                      
+                      {!audioFile ? (
+                        <div
+                          onClick={() => fileInputRef.current?.click()}
+                          className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-secondary/50 transition-colors"
+                        >
+                          <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                          <p className="text-sm font-medium">Clique para fazer upload</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            MP3, WAV, M4A, WebM, OGG, FLAC (máx 25MB)
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border border-border">
+                          <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                            <FileAudio className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{audioFile.name}</p>
+                            <p className="text-xs text-muted-foreground">{formatFileSize(audioFile.size)}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={removeAudioFile}
+                            className="h-8 w-8"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                      
+                      <p className="text-xs text-muted-foreground">
+                        A IA irá transcrever o áudio automaticamente e analisar a ligação.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Text Input - always shown for WhatsApp, optional for Ligação */}
                   <div className="space-y-2">
-                    <Label>Conversa / Transcrição</Label>
+                    <Label>
+                      {prospectionType === 'Ligação' && audioFile 
+                        ? 'Transcrição (opcional - será gerada automaticamente)'
+                        : prospectionType === 'Ligação'
+                        ? 'Transcrição (ou faça upload do áudio acima)'
+                        : 'Conversa'}
+                    </Label>
                     <Textarea
                       value={conversationText}
-                      onChange={(e) => setConversationText(e.target.value)}
-                      placeholder="Cole aqui o texto da conversa ou transcrição da ligação..."
+                      onChange={(e) => {
+                        setConversationText(e.target.value);
+                        if (e.target.value.trim()) {
+                          setAudioFile(null); // Clear audio if user types text
+                        }
+                      }}
+                      placeholder={
+                        prospectionType === 'Ligação'
+                          ? 'Cole a transcrição da ligação ou faça upload do áudio acima...'
+                          : 'Cole aqui o texto da conversa do WhatsApp...'
+                      }
                       className="bg-secondary border-border min-h-[200px]"
+                      disabled={isTranscribing}
                     />
                     <p className="text-xs text-muted-foreground">
                       A IA irá analisar a conversa e gerar automaticamente as notas, objeções e feedback.
@@ -205,9 +329,14 @@ export default function EvaluationsPage() {
                     onClick={handleAnalyze} 
                     variant="accent" 
                     className="w-full"
-                    disabled={isAnalyzing}
+                    disabled={isAnalyzing || isTranscribing}
                   >
-                    {isAnalyzing ? (
+                    {isTranscribing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Transcrevendo áudio...
+                      </>
+                    ) : isAnalyzing ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         Analisando com IA...
@@ -215,7 +344,9 @@ export default function EvaluationsPage() {
                     ) : (
                       <>
                         <Sparkles className="h-4 w-4 mr-2" />
-                        Analisar Prospecção
+                        {prospectionType === 'Ligação' && audioFile 
+                          ? 'Transcrever e Analisar'
+                          : 'Analisar Prospecção'}
                       </>
                     )}
                   </Button>
