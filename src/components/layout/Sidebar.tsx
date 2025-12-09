@@ -7,30 +7,41 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
-  LogOut
+  LogOut,
+  Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSettings } from '@/contexts/SettingsContext';
+import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from 'sonner';
 
-const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  { icon: Users, label: 'SDRs', path: '/sdrs' },
-  { icon: ClipboardCheck, label: 'Avaliações', path: '/evaluations' },
-  { icon: FileSpreadsheet, label: 'Exportar', path: '/export' },
+const baseMenuItems = [
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/', key: 'dashboard' },
+  { icon: Users, label: 'SDRs', path: '/sdrs', key: 'sdrs' },
+  { icon: ClipboardCheck, label: 'Avaliações', path: '/evaluations', key: 'evaluations' },
+  { icon: FileSpreadsheet, label: 'Exportar', path: '/export', key: 'export' },
 ];
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { user, signOut } = useAuth();
+  const { settings } = useSettings();
+  const { isAdmin } = useUserRole();
 
   const handleLogout = async () => {
     await signOut();
     toast.success('Logout realizado com sucesso!');
   };
+
+  // Filter menu items based on settings
+  const menuItems = baseMenuItems.filter(item => {
+    const menuKey = item.key as keyof typeof settings.menu;
+    return settings.menu[menuKey];
+  });
 
   return (
     <aside 
@@ -44,16 +55,38 @@ export function Sidebar() {
         <div className="flex h-16 items-center justify-between px-4 border-b border-border/50">
           {!collapsed && (
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg gradient-accent flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-accent-foreground" />
-              </div>
-              <span className="font-bold text-lg">Cardápio Web</span>
+              {settings.branding.logoUrl ? (
+                <img 
+                  src={settings.branding.logoUrl} 
+                  alt="Logo" 
+                  className="h-8 w-8 rounded-lg object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="h-8 w-8 rounded-lg gradient-accent flex items-center justify-center">
+                  <Sparkles className="h-5 w-5 text-accent-foreground" />
+                </div>
+              )}
+              <span className="font-bold text-lg">{settings.branding.companyName}</span>
             </div>
           )}
           {collapsed && (
-            <div className="h-8 w-8 rounded-lg gradient-accent flex items-center justify-center mx-auto">
-              <Sparkles className="h-5 w-5 text-accent-foreground" />
-            </div>
+            settings.branding.logoUrl ? (
+              <img 
+                src={settings.branding.logoUrl} 
+                alt="Logo" 
+                className="h-8 w-8 rounded-lg object-contain mx-auto"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="h-8 w-8 rounded-lg gradient-accent flex items-center justify-center mx-auto">
+                <Sparkles className="h-5 w-5 text-accent-foreground" />
+              </div>
+            )
           )}
         </div>
 
@@ -77,6 +110,22 @@ export function Sidebar() {
               </NavLink>
             );
           })}
+
+          {/* Admin Settings Link */}
+          {isAdmin && (
+            <NavLink
+              to="/settings"
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                location.pathname === '/settings'
+                  ? "gradient-accent text-accent-foreground shadow-lg shadow-accent/20" 
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              )}
+            >
+              <Settings className="h-5 w-5 shrink-0" />
+              {!collapsed && <span>Configurações</span>}
+            </NavLink>
+          )}
         </nav>
 
         {/* User & Actions */}
