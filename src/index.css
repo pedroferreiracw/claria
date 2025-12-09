@@ -82,9 +82,18 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', sans-serif;
+  }
+
+  /* Dark mode background with glow effect */
+  .dark body {
     background: 
       radial-gradient(ellipse 80% 50% at 50% -20%, hsl(280 80% 20% / 0.3), transparent),
       hsl(var(--background));
+  }
+
+  /* Light mode clean background */
+  .light body {
+    background: hsl(var(--background));
   }
 }
 
@@ -111,10 +120,20 @@
     border: 1px solid hsl(260 20% 20% / 0.5);
   }
 
+  .light .glass {
+    background: hsl(0 0% 100% / 0.9);
+    border: 1px solid hsl(260 10% 85% / 0.5);
+  }
+
   .glass-card {
-    background: linear-gradient(145deg, hsl(260 20% 12% / 0.9) 0%, hsl(260 20% 8% / 0.9) 100%);
+    background: var(--gradient-card);
     backdrop-filter: blur(8px);
     border: 1px solid hsl(260 20% 22% / 0.6);
+  }
+
+  .light .glass-card {
+    background: hsl(0 0% 100%);
+    border: 1px solid hsl(260 10% 88%);
   }
 
   .score-red {
@@ -209,4 +228,17 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(280 70% 40%);
+}
+
+/* Light mode scrollbar */
+.light ::-webkit-scrollbar-track {
+  background: hsl(260 10% 95%);
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: hsl(280 40% 70%);
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: hsl(280 50% 60%);
 }

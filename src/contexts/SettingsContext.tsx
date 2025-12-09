@@ -97,37 +97,50 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     enabled: !!user,
   });
 
+  // Apply theme immediately when settings change
   useEffect(() => {
     if (dbSettings) {
       setSettings(dbSettings);
-      // Apply theme
       applyTheme(dbSettings.theme.mode);
-      // Apply colors
       applyColors(dbSettings.colors);
     }
   }, [dbSettings]);
 
+  // Also apply theme on settings local state change (for immediate feedback)
+  useEffect(() => {
+    applyTheme(settings.theme.mode);
+  }, [settings.theme.mode]);
+
   const applyTheme = (mode: 'dark' | 'light') => {
     const root = document.documentElement;
+    
+    // Add class for CSS-based theming
+    root.classList.remove('light', 'dark');
+    root.classList.add(mode);
+    
     if (mode === 'light') {
-      root.style.setProperty('--background', '0 0% 98%');
+      // Light mode: white background, black text
+      root.style.setProperty('--background', '0 0% 100%');
       root.style.setProperty('--foreground', '260 20% 10%');
       root.style.setProperty('--card', '0 0% 100%');
       root.style.setProperty('--card-foreground', '260 20% 10%');
       root.style.setProperty('--popover', '0 0% 100%');
       root.style.setProperty('--popover-foreground', '260 20% 10%');
-      root.style.setProperty('--secondary', '260 10% 92%');
+      root.style.setProperty('--secondary', '260 10% 95%');
       root.style.setProperty('--secondary-foreground', '260 20% 10%');
-      root.style.setProperty('--muted', '260 10% 90%');
+      root.style.setProperty('--muted', '260 10% 93%');
       root.style.setProperty('--muted-foreground', '260 10% 40%');
-      root.style.setProperty('--border', '260 10% 85%');
-      root.style.setProperty('--input', '260 10% 90%');
+      root.style.setProperty('--border', '260 10% 88%');
+      root.style.setProperty('--input', '260 10% 95%');
       root.style.setProperty('--sidebar-background', '0 0% 98%');
       root.style.setProperty('--sidebar-foreground', '260 20% 10%');
-      root.style.setProperty('--sidebar-accent', '260 10% 92%');
+      root.style.setProperty('--sidebar-accent', '260 10% 93%');
       root.style.setProperty('--sidebar-accent-foreground', '260 20% 10%');
-      root.style.setProperty('--sidebar-border', '260 10% 85%');
+      root.style.setProperty('--sidebar-border', '260 10% 88%');
+      // Keep gradients subtle for light mode
+      root.style.setProperty('--gradient-card', 'linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(260 10% 98%) 100%)');
     } else {
+      // Dark mode: original dark theme
       root.style.setProperty('--background', '260 20% 6%');
       root.style.setProperty('--foreground', '0 0% 98%');
       root.style.setProperty('--card', '260 20% 10%');
@@ -145,6 +158,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       root.style.setProperty('--sidebar-accent', '260 20% 15%');
       root.style.setProperty('--sidebar-accent-foreground', '0 0% 98%');
       root.style.setProperty('--sidebar-border', '260 20% 15%');
+      root.style.setProperty('--gradient-card', 'linear-gradient(145deg, hsl(260 20% 12% / 0.9) 0%, hsl(260 20% 8% / 0.9) 100%)');
     }
   };
 
