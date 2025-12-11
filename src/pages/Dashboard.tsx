@@ -1,28 +1,50 @@
+import { useState, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { StatCard } from '@/components/ui/stat-card';
-import { ScoreBar } from '@/components/ui/score-badge';
-import { ScoresChart } from '@/components/dashboard/ScoresChart';
+import { ScoreGauge } from '@/components/dashboard/ScoreGauge';
+import { ConversionRate } from '@/components/dashboard/ConversionRate';
+import { StatsRow } from '@/components/dashboard/StatsRow';
+import { PhaseScoresTable } from '@/components/dashboard/PhaseScoresTable';
 import { ProgressChart } from '@/components/dashboard/ProgressChart';
 import { RankingList } from '@/components/dashboard/RankingList';
-import { ObjectionsHeatmap } from '@/components/dashboard/ObjectionsHeatmap';
-import { 
-  ClipboardCheck, 
-  Users, 
-  TrendingUp, 
-  Target,
-  Sparkles
-} from 'lucide-react';
-import { Scores, calculateFinalScore } from '@/types';
+import { ObjectionsList } from '@/components/dashboard/ObjectionsList';
+import { ObjectionsAnalysis } from '@/components/dashboard/ObjectionsAnalysis';
+import { BANTAnalysis } from '@/components/dashboard/BANTAnalysis';
+import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Scores } from '@/types';
+import { subDays } from 'date-fns';
 
 export default function Dashboard() {
   const { sdrs, evaluations } = useApp();
+  
+  // Filter states
+  const [selectedSdr, setSelectedSdr] = useState('all');
+  const [dateRange, setDateRange] = useState({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
+
+  // Filter evaluations based on selections
+  const filteredEvaluations = useMemo(() => {
+    return evaluations.filter(e => {
+      const evalDate = new Date(e.date);
+      const inDateRange = evalDate >= dateRange.from && evalDate <= dateRange.to;
+      const matchesSdr = selectedSdr === 'all' || e.sdrId === selectedSdr;
+      return inDateRange && matchesSdr;
+    });
+  }, [evaluations, selectedSdr, dateRange]);
 
   // Calculate stats
-  const totalEvaluations = evaluations.length;
-  const averageScore = evaluations.length > 0
-    ? Math.round(evaluations.reduce((sum, e) => sum + e.finalScore, 0) / evaluations.length)
+  const totalEvaluations = filteredEvaluations.length;
+  const averageScore = filteredEvaluations.length > 0
+    ? Math.round(filteredEvaluations.reduce((sum, e) => sum + e.finalScore, 0) / filteredEvaluations.length)
     : 0;
+
+  // Success/Failure counts
+  const successes = filteredEvaluations.filter(e => e.result === 'prosseguiu').length;
+  const failures = filteredEvaluations.filter(e => e.result === 'recusou' || e.result === 'perdeu_interesse').length;
+  const conversionRate = totalEvaluations > 0 ? Math.round((successes / totalEvaluations) * 100) : 0;
 
   // Calculate average by category
   const categoryAverages: Record<keyof Scores, number> = {
@@ -36,11 +58,11 @@ export default function Dashboard() {
     contornoObjecoes: 0,
   };
 
-  if (evaluations.length > 0) {
+  if (filteredEvaluations.length > 0) {
     Object.keys(categoryAverages).forEach(key => {
       const k = key as keyof Scores;
       categoryAverages[k] = Math.round(
-        evaluations.reduce((sum, e) => sum + e.scores[k], 0) / evaluations.length
+        filteredEvaluations.reduce((sum, e) => sum + e.scores[k], 0) / filteredEvaluations.length
       );
     });
   }
@@ -56,23 +78,35 @@ export default function Dashboard() {
     contornoObjecoes: 'Contorno de Objeções',
   };
 
-  // Chart data
-  const scoresChartData = Object.entries(categoryAverages).map(([key, value]) => ({
-    name: categoryLabels[key as keyof Scores],
-    value,
+  const categoryDescriptions: Record<keyof Scores, string> = {
+    abertura: 'Qualidade da abertura da conversa e apresentação inicial',
+    rapport: 'Capacidade de criar conexão e empatia com o lead',
+    spin: 'Uso correto das perguntas de Situação, Problema, Implicação e Necessidade',
+    bant: 'Identificação de Budget, Authority, Need e Timeline',
+    dores: 'Capacidade de identificar e explorar as dores do cliente',
+    geracaoValor: 'Apresentação de valor e benefícios da solução',
+    conducaoAgendamento: 'Habilidade em conduzir para o agendamento da reunião',
+    contornoObjecoes: 'Efetividade no tratamento de objeções',
+  };
+
+  // Phase scores data for table
+  const phaseScoresData = Object.entries(categoryAverages).map(([key, score]) => ({
+    phase: categoryLabels[key as keyof Scores],
+    score,
+    description: categoryDescriptions[key as keyof Scores],
   }));
 
-  // Weekly progress mock
+  // Weekly progress
   const weeklyProgress = [
-    { period: 'Sem 1', score: 68 },
-    { period: 'Sem 2', score: 72 },
-    { period: 'Sem 3', score: 75 },
-    { period: 'Sem 4', score: averageScore },
+    { period: 'Sem 1', score: 68, conversion: 55 },
+    { period: 'Sem 2', score: 72, conversion: 62 },
+    { period: 'Sem 3', score: 75, conversion: 65 },
+    { period: 'Sem 4', score: averageScore, conversion: conversionRate },
   ];
 
   // Ranking
   const sdrScores = sdrs.map(sdr => {
-    const sdrEvals = evaluations.filter(e => e.sdrId === sdr.id);
+    const sdrEvals = filteredEvaluations.filter(e => e.sdrId === sdr.id);
     const avgScore = sdrEvals.length > 0
       ? Math.round(sdrEvals.reduce((sum, e) => sum + e.finalScore, 0) / sdrEvals.length)
       : 0;
@@ -84,103 +118,129 @@ export default function Dashboard() {
     position: index + 1,
   }));
 
-  // Objections data
-  const objectionsData = [
-    { objection: 'Já temos um sistema', count: 15, effectiveness: 73 },
-    { objection: 'Está caro', count: 12, effectiveness: 65 },
-    { objection: 'Não tenho tempo agora', count: 10, effectiveness: 45 },
-    { objection: 'Preciso pensar', count: 8, effectiveness: 58 },
-    { objection: 'Vou falar com meu sócio', count: 6, effectiveness: 70 },
-  ];
+  // Objections data from evaluations
+  const allObjections = filteredEvaluations.flatMap(e => 
+    e.objections.map(obj => ({
+      id: `${e.id}-${obj.id}`,
+      date: new Date(e.date),
+      sdrName: sdrs.find(s => s.id === e.sdrId)?.name || 'SDR',
+      objection: obj.description,
+      response: obj.sdrResponse,
+      resolved: obj.wasEffective,
+    }))
+  );
+
+  const resolvedObjections = allObjections.filter(o => o.resolved).length;
+  const unresolvedObjections = allObjections.filter(o => !o.resolved).length;
+
+  // BANT analysis from evaluations
+  const bantData = {
+    budget: categoryAverages.bant,
+    authority: Math.round(categoryAverages.bant * 0.9), // Simulated variation
+    need: categoryAverages.dores,
+    timeline: Math.round(categoryAverages.conducaoAgendamento * 0.85),
+  };
 
   return (
     <MainLayout>
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-xl gradient-accent flex items-center justify-center">
-            <Sparkles className="h-6 w-6 text-accent-foreground" />
-          </div>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground">Visão geral do desempenho da equipe</p>
+            <p className="text-sm text-muted-foreground">Visão geral do desempenho da equipe</p>
           </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard
-            title="Total de Avaliações"
-            value={totalEvaluations}
-            subtitle="este mês"
-            icon={ClipboardCheck}
-            trend={{ value: 12, isPositive: true }}
-          />
-          <StatCard
-            title="Nota Média Geral"
-            value={averageScore}
-            subtitle="de 100 pontos"
-            icon={Target}
-            trend={{ value: 5, isPositive: true }}
-          />
-          <StatCard
-            title="SDRs Ativos"
-            value={sdrs.length}
-            subtitle="2 squads"
-            icon={Users}
-          />
-          <StatCard
-            title="Taxa de Sucesso"
-            value="68%"
-            subtitle="agendamentos"
-            icon={TrendingUp}
-            trend={{ value: 8, isPositive: true }}
+          <DashboardFilters
+            sdrs={sdrs}
+            selectedSdr={selectedSdr}
+            onSdrChange={setSelectedSdr}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
           />
         </div>
 
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Category Scores */}
-          <div className="glass-card rounded-xl p-6">
-            <h3 className="text-lg font-semibold mb-4">Notas por Categoria</h3>
-            <ScoresChart data={scoresChartData} />
-          </div>
+        {/* Tabs */}
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+            <TabsTrigger value="objections">Objeções</TabsTrigger>
+          </TabsList>
 
-          {/* Weekly Progress */}
-          <div className="glass-card rounded-xl p-6">
-            <h3 className="text-lg font-semibold mb-4">Evolução Semanal</h3>
-            <ProgressChart data={weeklyProgress} />
-          </div>
-        </div>
+          <TabsContent value="overview" className="space-y-6">
+            {/* Top Row - Score Gauge, Conversion, Stats */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Score Gauge */}
+              <div className="glass-card rounded-xl">
+                <ScoreGauge score={averageScore} label="Média SDR" />
+              </div>
 
-        {/* Bottom Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Ranking */}
-          <div className="glass-card rounded-xl p-6">
-            <h3 className="text-lg font-semibold mb-4">Ranking de SDRs</h3>
-            <RankingList items={ranking.slice(0, 5)} />
-          </div>
-
-          {/* Score Bars */}
-          <div className="glass-card rounded-xl p-6">
-            <h3 className="text-lg font-semibold mb-4">Detalhamento por Critério</h3>
-            <div className="space-y-4">
-              {Object.entries(categoryAverages).slice(0, 6).map(([key, value]) => (
-                <ScoreBar
-                  key={key}
-                  label={categoryLabels[key as keyof Scores]}
-                  score={value}
-                />
-              ))}
+              {/* Conversion Rate & Stats */}
+              <div className="glass-card rounded-xl p-6 space-y-6 lg:col-span-2">
+                <ConversionRate rate={conversionRate} />
+                <StatsRow successes={successes} total={totalEvaluations} failures={failures} />
+              </div>
             </div>
-          </div>
 
-          {/* Objections Heatmap */}
-          <div className="glass-card rounded-xl p-6">
-            <h3 className="text-lg font-semibold mb-4">Principais Objeções</h3>
-            <ObjectionsHeatmap data={objectionsData} />
-          </div>
-        </div>
+            {/* Middle Row - Phase Scores & Weekly Progress */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Phase Scores */}
+              <div className="glass-card rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4">Notas por Fase</h3>
+                <PhaseScoresTable data={phaseScoresData} />
+              </div>
+
+              {/* Weekly Progress */}
+              <div className="glass-card rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4">Evolução Semanal</h3>
+                <ProgressChart data={weeklyProgress} type="line" />
+                <div className="flex items-center justify-center gap-6 mt-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-primary" />
+                    <span className="text-xs text-muted-foreground">Nota Média</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-accent" />
+                    <span className="text-xs text-muted-foreground">Taxa Conversão</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Row - Ranking & BANT */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Ranking */}
+              <div className="glass-card rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4">Ranking de SDRs</h3>
+                <RankingList items={ranking.slice(0, 5)} />
+              </div>
+
+              {/* BANT Analysis */}
+              <div className="glass-card rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4">Análise BANT</h3>
+                <BANTAnalysis data={bantData} />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="objections" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Objections List */}
+              <div className="glass-card rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4">Objeções Recentes</h3>
+                <ObjectionsList objections={allObjections} maxItems={5} />
+              </div>
+
+              {/* Objections Analysis */}
+              <div className="glass-card rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4">Análise de Objeções</h3>
+                <ObjectionsAnalysis 
+                  resolved={resolvedObjections} 
+                  unresolved={unresolvedObjections} 
+                />
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </MainLayout>
   );
