@@ -100,63 +100,6 @@ export type Database = {
           },
         ]
       }
-      meetime_metrics: {
-        Row: {
-          agendamentos: number
-          data_referencia: string
-          id: string
-          no_show: number
-          sdr_id: string
-          sdr_nome: string
-          tempo_resposta_5min: number
-        }
-        Insert: {
-          agendamentos: number
-          data_referencia: string
-          id: string
-          no_show: number
-          sdr_id: string
-          sdr_nome: string
-          tempo_resposta_5min: number
-        }
-        Update: {
-          agendamentos?: number
-          data_referencia?: string
-          id?: string
-          no_show?: number
-          sdr_id?: string
-          sdr_nome?: string
-          tempo_resposta_5min?: number
-        }
-        Relationships: []
-      }
-      pipedrive_metrics: {
-        Row: {
-          clientes_fechados: number
-          data_referencia: string
-          id: string
-          sdr_id: string
-          sdr_nome: string
-          taxa_conversao_final: number
-        }
-        Insert: {
-          clientes_fechados: number
-          data_referencia: string
-          id: string
-          sdr_id: string
-          sdr_nome: string
-          taxa_conversao_final: number
-        }
-        Update: {
-          clientes_fechados?: number
-          data_referencia?: string
-          id?: string
-          sdr_id?: string
-          sdr_nome?: string
-          taxa_conversao_final?: number
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -211,27 +154,6 @@ export type Database = {
           role?: string
           squad?: Database["public"]["Enums"]["squad_type"]
           updated_at?: string
-        }
-        Relationships: []
-      }
-      squads: {
-        Row: {
-          id: string
-          sdr_id: string
-          sdr_nome: string
-          time: string
-        }
-        Insert: {
-          id: string
-          sdr_id: string
-          sdr_nome: string
-          time: string
-        }
-        Update: {
-          id?: string
-          sdr_id?: string
-          sdr_nome?: string
-          time?: string
         }
         Relationships: []
       }
