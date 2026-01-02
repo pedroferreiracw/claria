@@ -38,6 +38,153 @@ export type Database = {
         }
         Relationships: []
       }
+      badges: {
+        Row: {
+          color: string
+          created_at: string
+          criteria: Json
+          description: string
+          icon: string
+          id: string
+          name: string
+          points: number
+        }
+        Insert: {
+          color: string
+          created_at?: string
+          criteria: Json
+          description: string
+          icon: string
+          id?: string
+          name: string
+          points?: number
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          criteria?: Json
+          description?: string
+          icon?: string
+          id?: string
+          name?: string
+          points?: number
+        }
+        Relationships: []
+      }
+      best_practices: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          evaluation_id: string
+          final_score: number
+          highlight_text: string | null
+          id: string
+          is_featured: boolean | null
+          sdr_id: string
+          title: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          evaluation_id: string
+          final_score: number
+          highlight_text?: string | null
+          id?: string
+          is_featured?: boolean | null
+          sdr_id: string
+          title: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          evaluation_id?: string
+          final_score?: number
+          highlight_text?: string | null
+          id?: string
+          is_featured?: boolean | null
+          sdr_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "best_practices_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "evaluations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "best_practices_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdrs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      development_plans: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          due_date: string | null
+          evaluation_id: string | null
+          id: string
+          priority: string
+          recommendation: string
+          sdr_id: string
+          status: string
+          updated_at: string
+          weak_area: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          due_date?: string | null
+          evaluation_id?: string | null
+          id?: string
+          priority: string
+          recommendation: string
+          sdr_id: string
+          status?: string
+          updated_at?: string
+          weak_area: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          due_date?: string | null
+          evaluation_id?: string | null
+          id?: string
+          priority?: string
+          recommendation?: string
+          sdr_id?: string
+          status?: string
+          updated_at?: string
+          weak_area?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "development_plans_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "evaluations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "development_plans_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdrs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       evaluations: {
         Row: {
           ai_feedback: Json | null
@@ -100,6 +247,201 @@ export type Database = {
           },
         ]
       }
+      goals: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          current_value: number
+          description: string | null
+          end_date: string
+          id: string
+          metric_type: string
+          sdr_id: string | null
+          squad: Database["public"]["Enums"]["squad_type"] | null
+          start_date: string
+          status: string
+          target_value: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          current_value?: number
+          description?: string | null
+          end_date: string
+          id?: string
+          metric_type: string
+          sdr_id?: string | null
+          squad?: Database["public"]["Enums"]["squad_type"] | null
+          start_date?: string
+          status?: string
+          target_value: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          current_value?: number
+          description?: string | null
+          end_date?: string
+          id?: string
+          metric_type?: string
+          sdr_id?: string | null
+          squad?: Database["public"]["Enums"]["squad_type"] | null
+          start_date?: string
+          status?: string
+          target_value?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdrs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monthly_scores: {
+        Row: {
+          average_score: number
+          conversion_rate: number
+          created_at: string
+          evaluations_count: number
+          id: string
+          month: number
+          rank_position: number | null
+          sdr_id: string
+          total_points: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          average_score?: number
+          conversion_rate?: number
+          created_at?: string
+          evaluations_count?: number
+          id?: string
+          month: number
+          rank_position?: number | null
+          sdr_id: string
+          total_points?: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          average_score?: number
+          conversion_rate?: number
+          created_at?: string
+          evaluations_count?: number
+          id?: string
+          month?: number
+          rank_position?: number | null
+          sdr_id?: string
+          total_points?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_scores_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdrs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pipedrive_config: {
+        Row: {
+          api_token: string | null
+          created_at: string
+          created_by: string | null
+          domain: string | null
+          id: string
+          is_connected: boolean | null
+          last_sync_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_token?: string | null
+          created_at?: string
+          created_by?: string | null
+          domain?: string | null
+          id?: string
+          is_connected?: boolean | null
+          last_sync_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_token?: string | null
+          created_at?: string
+          created_by?: string | null
+          domain?: string | null
+          id?: string
+          is_connected?: boolean | null
+          last_sync_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pipedrive_deals: {
+        Row: {
+          created_at: string
+          currency: string | null
+          id: string
+          lost_time: string | null
+          pipedrive_id: number
+          sdr_id: string | null
+          stage_name: string | null
+          status: string | null
+          synced_at: string
+          title: string
+          value: number | null
+          won_time: string | null
+        }
+        Insert: {
+          created_at?: string
+          currency?: string | null
+          id?: string
+          lost_time?: string | null
+          pipedrive_id: number
+          sdr_id?: string | null
+          stage_name?: string | null
+          status?: string | null
+          synced_at?: string
+          title: string
+          value?: number | null
+          won_time?: string | null
+        }
+        Update: {
+          created_at?: string
+          currency?: string | null
+          id?: string
+          lost_time?: string | null
+          pipedrive_id?: number
+          sdr_id?: string | null
+          stage_name?: string | null
+          status?: string | null
+          synced_at?: string
+          title?: string
+          value?: number | null
+          won_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipedrive_deals_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdrs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -126,6 +468,80 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      sdr_badges: {
+        Row: {
+          badge_id: string
+          earned_at: string
+          id: string
+          sdr_id: string
+        }
+        Insert: {
+          badge_id: string
+          earned_at?: string
+          id?: string
+          sdr_id: string
+        }
+        Update: {
+          badge_id?: string
+          earned_at?: string
+          id?: string
+          sdr_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_badges_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "badges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sdr_badges_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdrs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdr_streaks: {
+        Row: {
+          current_streak: number
+          id: string
+          last_activity_date: string | null
+          longest_streak: number
+          sdr_id: string
+          streak_type: string
+          updated_at: string
+        }
+        Insert: {
+          current_streak?: number
+          id?: string
+          last_activity_date?: string | null
+          longest_streak?: number
+          sdr_id: string
+          streak_type?: string
+          updated_at?: string
+        }
+        Update: {
+          current_streak?: number
+          id?: string
+          last_activity_date?: string | null
+          longest_streak?: number
+          sdr_id?: string
+          streak_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_streaks_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: true
+            referencedRelation: "sdrs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sdrs: {
         Row: {
