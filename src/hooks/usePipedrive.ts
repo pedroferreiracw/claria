@@ -3,6 +3,87 @@ import { supabase } from '@/integrations/supabase/client';
 import { PipedriveConfig, PipedriveDeal } from '@/types/goals';
 import { toast } from 'sonner';
 
+// Combined hook for Pipedrive data
+export function usePipedrive() {
+  const queryClient = useQueryClient();
+
+  const configQuery = useQuery({
+    queryKey: ['pipedrive-config'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('pipedrive_config')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const dealsQuery = useQuery({
+    queryKey: ['pipedrive-deals'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('pipedrive_deals')
+        .select('*')
+        .order('synced_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const saveConfig = async ({ apiToken, domain }: { apiToken: string; domain: string }) => {
+    const { data: userData } = await supabase.auth.getUser();
+    
+    const { data: existing } = await supabase
+      .from('pipedrive_config')
+      .select('id')
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .from('pipedrive_config')
+        .update({
+          api_token: apiToken,
+          domain,
+          is_connected: true,
+        })
+        .eq('id', existing.id);
+
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('pipedrive_config')
+        .insert({
+          api_token: apiToken,
+          domain,
+          is_connected: true,
+          created_by: userData.user?.id,
+        });
+
+      if (error) throw error;
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['pipedrive-config'] });
+  };
+
+  const syncDeals = async () => {
+    queryClient.invalidateQueries({ queryKey: ['pipedrive-deals'] });
+    queryClient.invalidateQueries({ queryKey: ['pipedrive-config'] });
+  };
+
+  return {
+    config: configQuery.data,
+    deals: dealsQuery.data || [],
+    isLoading: configQuery.isLoading || dealsQuery.isLoading,
+    saveConfig,
+    syncDeals,
+  };
+}
+
 export function usePipedriveConfig() {
   return useQuery({
     queryKey: ['pipedrive-config'],
@@ -11,9 +92,9 @@ export function usePipedriveConfig() {
         .from('pipedrive_config')
         .select('*')
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       
       if (!data) return null;
 
@@ -43,7 +124,7 @@ export function useSavePipedriveConfig() {
         .from('pipedrive_config')
         .select('id')
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         const { error } = await supabase

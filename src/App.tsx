@@ -13,6 +13,12 @@ import SDRsPage from "./pages/SDRs";
 import EvaluationsPage from "./pages/Evaluations";
 import ExportPage from "./pages/Export";
 import SettingsPage from "./pages/Settings";
+import GoalsPage from "./pages/Goals";
+import DevelopmentPage from "./pages/Development";
+import ComparePage from "./pages/Compare";
+import BestPracticesPage from "./pages/BestPractices";
+import GamificationPage from "./pages/Gamification";
+import PipedrivePage from "./pages/Pipedrive";
 import AuthPage from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -33,6 +39,12 @@ const App = () => (
                 <Route path="/sdrs" element={<ProtectedRoute><SDRsPage /></ProtectedRoute>} />
                 <Route path="/evaluations" element={<ProtectedRoute><EvaluationsPage /></ProtectedRoute>} />
                 <Route path="/export" element={<ProtectedRoute><ExportPage /></ProtectedRoute>} />
+                <Route path="/goals" element={<ProtectedRoute><GoalsPage /></ProtectedRoute>} />
+                <Route path="/development" element={<ProtectedRoute><DevelopmentPage /></ProtectedRoute>} />
+                <Route path="/compare" element={<ProtectedRoute><ComparePage /></ProtectedRoute>} />
+                <Route path="/best-practices" element={<ProtectedRoute><BestPracticesPage /></ProtectedRoute>} />
+                <Route path="/gamification" element={<ProtectedRoute><GamificationPage /></ProtectedRoute>} />
+                <Route path="/pipedrive" element={<ProtectedRoute><PipedrivePage /></ProtectedRoute>} />
                 <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

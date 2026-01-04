@@ -8,7 +8,13 @@ import {
   ChevronRight,
   Sparkles,
   LogOut,
-  Settings
+  Settings,
+  Target,
+  TrendingUp,
+  GitCompare,
+  BookOpen,
+  Trophy,
+  Plug
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -22,6 +28,12 @@ const baseMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', key: 'dashboard' },
   { icon: Users, label: 'SDRs', path: '/sdrs', key: 'sdrs' },
   { icon: ClipboardCheck, label: 'Avaliações', path: '/evaluations', key: 'evaluations' },
+  { icon: Target, label: 'Metas', path: '/goals', key: 'goals' },
+  { icon: TrendingUp, label: 'PDI', path: '/development', key: 'development' },
+  { icon: GitCompare, label: 'Comparar', path: '/compare', key: 'compare' },
+  { icon: BookOpen, label: 'Boas Práticas', path: '/best-practices', key: 'bestPractices' },
+  { icon: Trophy, label: 'Gamificação', path: '/gamification', key: 'gamification' },
+  { icon: Plug, label: 'Pipedrive', path: '/pipedrive', key: 'pipedrive' },
   { icon: FileSpreadsheet, label: 'Exportar', path: '/export', key: 'export' },
 ];
 
