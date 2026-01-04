@@ -3,6 +3,78 @@ import { supabase } from '@/integrations/supabase/client';
 import { Badge, SDRBadge, SDRStreak, MonthlyScore } from '@/types/goals';
 import { toast } from 'sonner';
 
+// Combined hook for gamification data
+export function useGamification() {
+  const badgesQuery = useQuery({
+    queryKey: ['badges'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('badges')
+        .select('*')
+        .order('points', { ascending: false });
+
+      if (error) throw error;
+      return data.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        icon: row.icon,
+        color: row.color,
+        criteria: row.criteria,
+        points: row.points,
+        createdAt: new Date(row.created_at),
+      })) as Badge[];
+    },
+  });
+
+  const monthlyScoresQuery = useQuery({
+    queryKey: ['monthly-scores-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('monthly_scores')
+        .select('*')
+        .order('rank_position', { ascending: true });
+
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
+  const sdrBadgesQuery = useQuery({
+    queryKey: ['sdr-badges-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sdr_badges')
+        .select('*')
+        .order('earned_at', { ascending: false });
+
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
+  const streaksQuery = useQuery({
+    queryKey: ['sdr-streaks'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sdr_streaks')
+        .select('*')
+        .order('current_streak', { ascending: false });
+
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
+  return {
+    badges: badgesQuery.data || [],
+    monthlyScores: monthlyScoresQuery.data || [],
+    sdrBadges: sdrBadgesQuery.data || [],
+    streaks: streaksQuery.data || [],
+    isLoading: badgesQuery.isLoading || monthlyScoresQuery.isLoading || sdrBadgesQuery.isLoading || streaksQuery.isLoading,
+  };
+}
+
 // Badges
 export function useBadges() {
   return useQuery({
@@ -81,7 +153,6 @@ export function useAwardBadge() {
     },
     onError: (error: any) => {
       if (error.code === '23505') {
-        // Duplicate - badge already earned
         return;
       }
       console.error('Error awarding badge:', error);
@@ -121,7 +192,6 @@ export function useUpdateStreak() {
     mutationFn: async (sdrId: string) => {
       const today = new Date().toISOString().split('T')[0];
       
-      // Get current streak
       const { data: existing } = await supabase
         .from('sdr_streaks')
         .select('*')
