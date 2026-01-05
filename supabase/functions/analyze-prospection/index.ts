@@ -6,6 +6,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Maximum allowed conversation text length (50,000 characters ~25 pages)
+const MAX_CONVERSATION_LENGTH = 50000;
+
+// Allowed prospection types
+const ALLOWED_PROSPECTION_TYPES = ['WhatsApp', 'Ligação', 'Email', 'Reunião'];
+
 const systemPrompt = `Você é um especialista em análise de prospecções comerciais da Cardápio Web, empresa de soluções digitais para restaurantes.
 
 Sua tarefa é analisar conversas de prospecção (ligação ou WhatsApp) e avaliar o desempenho do SDR.
@@ -75,19 +81,33 @@ serve(async (req) => {
 
     const { conversationText, prospectionType } = await req.json();
 
-    if (!conversationText) {
+    // Input validation - check type
+    if (!conversationText || typeof conversationText !== 'string') {
       return new Response(
         JSON.stringify({ error: "Texto da conversa é obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // Input validation - check length
+    if (conversationText.length > MAX_CONVERSATION_LENGTH) {
+      return new Response(
+        JSON.stringify({ error: `Texto da conversa muito longo (máximo ${MAX_CONVERSATION_LENGTH} caracteres)` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate and sanitize prospectionType
+    const sanitizedProspectionType = ALLOWED_PROSPECTION_TYPES.includes(prospectionType) 
+      ? prospectionType 
+      : 'WhatsApp';
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const userPrompt = `Analise esta conversa de prospecção (${prospectionType || "WhatsApp"}) e forneça a avaliação completa:
+    const userPrompt = `Analise esta conversa de prospecção (${sanitizedProspectionType}) e forneça a avaliação completa:
 
 ---
 ${conversationText}
@@ -228,7 +248,7 @@ Use a ferramenta analyze_prospection para retornar a análise estruturada.`;
         );
       }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("AI gateway error:", response.status);
       throw new Error(`AI gateway error: ${response.status}`);
     }
 

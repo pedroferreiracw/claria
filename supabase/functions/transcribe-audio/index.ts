@@ -7,6 +7,24 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Maximum audio size in bytes (25MB - OpenAI Whisper limit)
+const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
+
+// Allowed audio MIME types
+const ALLOWED_MIME_TYPES = [
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/wave',
+  'audio/x-wav',
+  'audio/m4a',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/webm',
+  'audio/ogg',
+  'audio/flac',
+];
+
 // Process base64 in chunks to prevent memory issues
 function processBase64Chunks(base64String: string, chunkSize = 32768): Uint8Array {
   const chunks: Uint8Array[] = [];
@@ -78,8 +96,20 @@ serve(async (req) => {
 
     const { audio, mimeType } = await req.json();
     
-    if (!audio) {
-      throw new Error('No audio data provided');
+    // Input validation - check audio data exists
+    if (!audio || typeof audio !== 'string') {
+      return new Response(
+        JSON.stringify({ error: 'Dados de áudio não fornecidos' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Input validation - check mime type
+    if (!mimeType || !ALLOWED_MIME_TYPES.includes(mimeType)) {
+      return new Response(
+        JSON.stringify({ error: 'Formato de áudio inválido. Formatos aceitos: MP3, WAV, M4A, WebM, OGG, FLAC' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log('Received audio for transcription, mimeType:', mimeType);
@@ -87,6 +117,14 @@ serve(async (req) => {
     // Process audio in chunks
     const binaryAudio = processBase64Chunks(audio);
     console.log('Audio binary size:', binaryAudio.length);
+
+    // Input validation - check file size
+    if (binaryAudio.length > MAX_AUDIO_SIZE) {
+      return new Response(
+        JSON.stringify({ error: 'Arquivo de áudio muito grande (máximo 25MB)' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     // Determine file extension from mime type
     const mimeToExt: Record<string, string> = {
@@ -108,7 +146,7 @@ serve(async (req) => {
     
     // Prepare form data
     const formData = new FormData();
-    const blob = new Blob([new Uint8Array(binaryAudio)], { type: mimeType || 'audio/mpeg' });
+    const blob = new Blob([new Uint8Array(binaryAudio)], { type: mimeType });
     formData.append('file', blob, filename);
     formData.append('model', 'whisper-1');
     formData.append('language', 'pt');
@@ -126,8 +164,8 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Whisper API error:', response.status, errorText);
-      throw new Error(`Whisper API error: ${response.status} - ${errorText}`);
+      console.error('Whisper API error:', response.status);
+      throw new Error(`Whisper API error: ${response.status}`);
     }
 
     const result = await response.json();
