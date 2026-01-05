@@ -1,18 +1,20 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { usePipedrive } from '@/hooks/usePipedrive';
 import { useSDRs } from '@/hooks/useSDRs';
 import { SDR } from '@/types';
-import { Plug, RefreshCw, Check, X, ExternalLink, TrendingUp, DollarSign, Target } from 'lucide-react';
+import { Plug, RefreshCw, Check, X, ExternalLink, TrendingUp, DollarSign, Target, Percent } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { DealFilters } from '@/components/pipedrive/DealFilters';
+import { DealsTable } from '@/components/pipedrive/DealsTable';
+import { isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 
 export default function PipedrivePage() {
   const { config, deals, isLoading, saveConfig, syncDeals } = usePipedrive();
@@ -23,6 +25,13 @@ export default function PipedrivePage() {
   const [domain, setDomain] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sdrFilter, setSdrFilter] = useState('all');
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate, setEndDate] = useState<Date | undefined>();
 
   const handleSaveConfig = async () => {
     if (!apiToken || !domain) {
@@ -57,16 +66,56 @@ export default function PipedrivePage() {
     }
   };
 
-  const wonDeals = deals.filter(d => d.status === 'won');
-  const lostDeals = deals.filter(d => d.status === 'lost');
-  const openDeals = deals.filter(d => d.status === 'open');
-  const totalValue = wonDeals.reduce((sum, d) => sum + (d.value || 0), 0);
-
-  const getSdrName = (sdrId: string | null) => {
-    if (!sdrId) return '-';
-    const sdr = sdrs.find(s => s.id === sdrId);
-    return sdr?.name || '-';
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setSdrFilter('all');
+    setStartDate(undefined);
+    setEndDate(undefined);
   };
+
+  // Filter deals
+  const filteredDeals = useMemo(() => {
+    return deals.filter((deal) => {
+      // Search filter
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        const matchesTitle = deal.title?.toLowerCase().includes(search);
+        const matchesOrg = deal.organization_name?.toLowerCase().includes(search);
+        if (!matchesTitle && !matchesOrg) return false;
+      }
+
+      // Status filter
+      if (statusFilter !== 'all' && deal.status !== statusFilter) {
+        return false;
+      }
+
+      // SDR filter
+      if (sdrFilter !== 'all' && deal.sdr_id !== sdrFilter) {
+        return false;
+      }
+
+      // Date filter (using add_time or won_time)
+      if (startDate || endDate) {
+        const dealDate = deal.won_time || deal.add_time;
+        if (!dealDate) return false;
+        
+        const parsedDate = parseISO(dealDate);
+        if (startDate && parsedDate < startOfDay(startDate)) return false;
+        if (endDate && parsedDate > endOfDay(endDate)) return false;
+      }
+
+      return true;
+    });
+  }, [deals, searchTerm, statusFilter, sdrFilter, startDate, endDate]);
+
+  // Stats based on filtered deals
+  const wonDeals = filteredDeals.filter(d => d.status === 'won');
+  const lostDeals = filteredDeals.filter(d => d.status === 'lost');
+  const openDeals = filteredDeals.filter(d => d.status === 'open');
+  const totalValue = wonDeals.reduce((sum, d) => sum + (d.value || 0), 0);
+  const avgValue = wonDeals.length > 0 ? totalValue / wonDeals.length : 0;
+  const conversionRate = filteredDeals.length > 0 ? (wonDeals.length / filteredDeals.length) * 100 : 0;
 
   if (isLoading) {
     return (
@@ -90,7 +139,7 @@ export default function PipedrivePage() {
           <p className="text-muted-foreground">Conecte e sincronize dados do seu CRM</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Config Card */}
           <Card>
             <CardHeader>
@@ -182,7 +231,7 @@ export default function PipedrivePage() {
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold">{wonDeals.length}</p>
-              <p className="text-sm text-muted-foreground">deals fechados</p>
+              <p className="text-sm text-muted-foreground">de {filteredDeals.length} negócios</p>
             </CardContent>
           </Card>
 
@@ -197,7 +246,22 @@ export default function PipedrivePage() {
               <p className="text-3xl font-bold">
                 {totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </p>
-              <p className="text-sm text-muted-foreground">em negócios ganhos</p>
+              <p className="text-sm text-muted-foreground">
+                Média: {avgValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Percent className="h-4 w-4 text-accent" />
+                Taxa de Conversão
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold">{conversionRate.toFixed(1)}%</p>
+              <p className="text-sm text-muted-foreground">ganhos / total</p>
             </CardContent>
           </Card>
         </div>
@@ -224,62 +288,46 @@ export default function PipedrivePage() {
           </Card>
         </div>
 
+        {/* Filters */}
+        {config?.is_connected && (
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Filtros</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DealFilters
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                statusFilter={statusFilter}
+                onStatusChange={setStatusFilter}
+                sdrFilter={sdrFilter}
+                onSdrChange={setSdrFilter}
+                startDate={startDate}
+                onStartDateChange={setStartDate}
+                endDate={endDate}
+                onEndDateChange={setEndDate}
+                sdrs={sdrs}
+                onClearFilters={clearFilters}
+              />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Deals Table */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Target className="h-5 w-5" />
-              Últimos Negócios
+              Negócios
             </CardTitle>
-            <CardDescription>Negócios sincronizados do Pipedrive</CardDescription>
+            <CardDescription>
+              {filteredDeals.length} negócio(s) encontrado(s)
+              {deals.length !== filteredDeals.length && ` de ${deals.length} total`}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {deals.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Título</TableHead>
-                    <TableHead>SDR</TableHead>
-                    <TableHead>Etapa</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {deals.slice(0, 10).map((deal) => (
-                    <TableRow key={deal.id}>
-                      <TableCell className="font-medium">{deal.title}</TableCell>
-                      <TableCell>{getSdrName(deal.sdr_id)}</TableCell>
-                      <TableCell>{deal.stage_name || '-'}</TableCell>
-                      <TableCell>
-                        {deal.value
-                          ? deal.value.toLocaleString('pt-BR', { style: 'currency', currency: deal.currency || 'BRL' })
-                          : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            deal.status === 'won'
-                              ? 'default'
-                              : deal.status === 'lost'
-                              ? 'destructive'
-                              : 'secondary'
-                          }
-                          className={
-                            deal.status === 'won'
-                              ? 'bg-green-500/20 text-green-500'
-                              : deal.status === 'lost'
-                              ? 'bg-red-500/20 text-red-500'
-                              : ''
-                          }
-                        >
-                          {deal.status === 'won' ? 'Ganho' : deal.status === 'lost' ? 'Perdido' : 'Aberto'}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <DealsTable deals={filteredDeals} sdrs={sdrs} />
             ) : (
               <p className="text-center text-muted-foreground py-8">
                 {config?.is_connected

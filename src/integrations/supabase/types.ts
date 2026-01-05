@@ -391,11 +391,17 @@ export type Database = {
       }
       pipedrive_deals: {
         Row: {
+          add_time: string | null
           created_at: string
           currency: string | null
+          expected_close_date: string | null
           id: string
+          lost_reason: string | null
           lost_time: string | null
+          organization_name: string | null
+          person_name: string | null
           pipedrive_id: number
+          pipeline_name: string | null
           sdr_id: string | null
           stage_name: string | null
           status: string | null
@@ -405,11 +411,17 @@ export type Database = {
           won_time: string | null
         }
         Insert: {
+          add_time?: string | null
           created_at?: string
           currency?: string | null
+          expected_close_date?: string | null
           id?: string
+          lost_reason?: string | null
           lost_time?: string | null
+          organization_name?: string | null
+          person_name?: string | null
           pipedrive_id: number
+          pipeline_name?: string | null
           sdr_id?: string | null
           stage_name?: string | null
           status?: string | null
@@ -419,11 +431,17 @@ export type Database = {
           won_time?: string | null
         }
         Update: {
+          add_time?: string | null
           created_at?: string
           currency?: string | null
+          expected_close_date?: string | null
           id?: string
+          lost_reason?: string | null
           lost_time?: string | null
+          organization_name?: string | null
+          person_name?: string | null
           pipedrive_id?: number
+          pipeline_name?: string | null
           sdr_id?: string | null
           stage_name?: string | null
           status?: string | null
