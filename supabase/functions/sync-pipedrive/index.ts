@@ -137,7 +137,7 @@ serve(async (req) => {
     const { data: sdrs } = await supabase.from('sdrs').select('id, name');
     const sdrMap = new Map(sdrs?.map(s => [s.name.toLowerCase(), s.id]) || []);
 
-    // Upsert deals
+    // Upsert deals with expanded data
     const dealsToUpsert = deals.map((deal: any) => {
       // Try to match SDR by owner name
       const ownerName = deal.owner_name?.toLowerCase() || '';
@@ -154,6 +154,13 @@ serve(async (req) => {
         lost_time: deal.lost_time || null,
         sdr_id: sdrId,
         synced_at: new Date().toISOString(),
+        // New fields
+        organization_name: deal.org_name || null,
+        person_name: deal.person_name || null,
+        expected_close_date: deal.expected_close_date || null,
+        add_time: deal.add_time || null,
+        lost_reason: deal.lost_reason || null,
+        pipeline_name: deal.pipeline?.name || null,
       };
     });
 
