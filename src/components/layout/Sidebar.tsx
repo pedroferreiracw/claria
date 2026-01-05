@@ -49,10 +49,10 @@ export function Sidebar() {
     toast.success('Logout realizado com sucesso!');
   };
 
-  // Filter menu items based on settings
+  // Filter menu items based on settings (show by default if not explicitly disabled)
   const menuItems = baseMenuItems.filter(item => {
     const menuKey = item.key as keyof typeof settings.menu;
-    return settings.menu[menuKey];
+    return settings.menu[menuKey] !== false;
   });
 
   return (
