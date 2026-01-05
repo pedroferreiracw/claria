@@ -81,20 +81,30 @@ serve(async (req) => {
       );
     }
 
-    // Validate domain format (alphanumeric and hyphens only)
-    const domainRegex = /^[a-zA-Z0-9-]+$/;
-    if (!domainRegex.test(config.domain)) {
-      console.error('Invalid domain format');
+    // Sanitize domain - extract subdomain if full URL was provided
+    let cleanDomain = config.domain.trim().toLowerCase();
+    
+    // Remove protocol if present
+    cleanDomain = cleanDomain.replace(/^https?:\/\//, '');
+    // Remove .pipedrive.com suffix if present
+    cleanDomain = cleanDomain.replace(/\.pipedrive\.com\/?.*$/, '');
+    // Remove any trailing slashes or paths
+    cleanDomain = cleanDomain.split('/')[0];
+    
+    // Validate domain format (alphanumeric and hyphens only, no leading/trailing hyphens)
+    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/;
+    if (!domainRegex.test(cleanDomain) || cleanDomain.length === 0) {
+      console.error('Invalid domain format:', cleanDomain);
       return new Response(
-        JSON.stringify({ error: 'Formato de domínio inválido' }),
+        JSON.stringify({ error: 'Formato de domínio inválido. Use apenas o subdomínio (ex: suaempresa)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Fetching deals from Pipedrive...');
+    console.log('Fetching deals from Pipedrive for domain:', cleanDomain);
 
     // Fetch deals from Pipedrive using API token in header instead of URL
-    const pipedriveUrl = `https://${config.domain}.pipedrive.com/api/v1/deals?limit=100`;
+    const pipedriveUrl = `https://${cleanDomain}.pipedrive.com/api/v1/deals?limit=100`;
     const pipedriveResponse = await fetch(pipedriveUrl, {
       headers: {
         'x-api-token': config.api_token,
