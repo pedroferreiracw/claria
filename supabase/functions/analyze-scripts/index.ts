@@ -53,6 +53,22 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id);
 
+    // Check if user is admin for this sensitive operation
+    const { data: roleData } = await supabaseClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .maybeSingle();
+
+    if (!roleData) {
+      console.error('User is not admin:', user.id);
+      return new Response(
+        JSON.stringify({ error: 'Acesso restrito a administradores' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     if (!OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY não configurada');
@@ -64,11 +80,25 @@ serve(async (req) => {
 
     const { sdr_id, period_days = 30 } = await req.json();
 
-    console.log('Analyzing scripts for SDR:', sdr_id, 'Period:', period_days, 'days');
+    // Input validation for period_days
+    const validatedPeriodDays = Math.min(Math.max(Number(period_days) || 30, 1), 365);
+
+    // Validate sdr_id format if provided
+    if (sdr_id && typeof sdr_id === 'string') {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(sdr_id)) {
+        return new Response(
+          JSON.stringify({ error: 'ID do SDR inválido' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    console.log('Analyzing scripts for SDR:', sdr_id, 'Period:', validatedPeriodDays, 'days');
 
     // Fetch recent evaluations
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - period_days);
+    startDate.setDate(startDate.getDate() - validatedPeriodDays);
 
     let query = supabaseAdmin
       .from('evaluations')
@@ -142,7 +172,7 @@ Retorne sua análise em formato JSON válido.`;
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('OpenAI API error:', response.status, errorText);
+      console.error('OpenAI API error:', response.status);
       throw new Error(`Erro da API OpenAI: ${response.status}`);
     }
 

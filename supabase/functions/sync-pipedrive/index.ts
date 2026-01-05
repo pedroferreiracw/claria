@@ -12,7 +12,51 @@ serve(async (req) => {
   }
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('Missing authorization header');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      console.error('Auth error:', authError?.message || 'No user found');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Authenticated user:', user.id);
+
+    // Check if user is admin
+    const { data: roleData } = await supabaseClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .maybeSingle();
+
+    if (!roleData) {
+      console.error('User is not admin:', user.id);
+      return new Response(
+        JSON.stringify({ error: 'Acesso restrito a administradores' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Use service role for database operations
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -37,15 +81,29 @@ serve(async (req) => {
       );
     }
 
+    // Validate domain format (alphanumeric and hyphens only)
+    const domainRegex = /^[a-zA-Z0-9-]+$/;
+    if (!domainRegex.test(config.domain)) {
+      console.error('Invalid domain format');
+      return new Response(
+        JSON.stringify({ error: 'Formato de domínio inválido' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('Fetching deals from Pipedrive...');
 
-    // Fetch deals from Pipedrive
-    const pipedriveUrl = `https://${config.domain}.pipedrive.com/api/v1/deals?api_token=${config.api_token}&limit=100`;
-    const pipedriveResponse = await fetch(pipedriveUrl);
+    // Fetch deals from Pipedrive using API token in header instead of URL
+    const pipedriveUrl = `https://${config.domain}.pipedrive.com/api/v1/deals?limit=100`;
+    const pipedriveResponse = await fetch(pipedriveUrl, {
+      headers: {
+        'x-api-token': config.api_token,
+      },
+    });
     
     if (!pipedriveResponse.ok) {
       const errorText = await pipedriveResponse.text();
-      console.error('Pipedrive API error:', errorText);
+      console.error('Pipedrive API error:', pipedriveResponse.status);
       return new Response(
         JSON.stringify({ error: 'Erro ao conectar com Pipedrive' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
