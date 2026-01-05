@@ -170,14 +170,14 @@ export default function GoalsPage() {
                   <div>
                     <Label>SDR (opcional)</Label>
                     <Select
-                      value={formData.sdrId}
-                      onValueChange={(v) => setFormData({ ...formData, sdrId: v, squad: '' })}
+                      value={formData.sdrId || "none"}
+                      onValueChange={(v) => setFormData({ ...formData, sdrId: v === "none" ? "" : v, squad: '' })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Nenhum (meta geral)</SelectItem>
+                        <SelectItem value="none">Nenhum (meta geral)</SelectItem>
                         {sdrs.map((sdr) => (
                           <SelectItem key={sdr.id} value={sdr.id}>{sdr.name}</SelectItem>
                         ))}
@@ -187,14 +187,14 @@ export default function GoalsPage() {
                   <div>
                     <Label>Squad (opcional)</Label>
                     <Select
-                      value={formData.squad}
-                      onValueChange={(v) => setFormData({ ...formData, squad: v, sdrId: '' })}
+                      value={formData.squad || "none"}
+                      onValueChange={(v) => setFormData({ ...formData, squad: v === "none" ? "" : v, sdrId: '' })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Nenhum</SelectItem>
+                        <SelectItem value="none">Nenhum</SelectItem>
                         <SelectItem value="Águia">Águia</SelectItem>
                         <SelectItem value="Lobo">Lobo</SelectItem>
                       </SelectContent>
