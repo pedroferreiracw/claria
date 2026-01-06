@@ -19,6 +19,7 @@ import ComparePage from "./pages/Compare";
 import BestPracticesPage from "./pages/BestPractices";
 import GamificationPage from "./pages/Gamification";
 import PipedrivePage from "./pages/Pipedrive";
+import MeetimePage from "./pages/Meetime";
 import AuthPage from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -45,6 +46,7 @@ const App = () => (
                 <Route path="/best-practices" element={<ProtectedRoute><BestPracticesPage /></ProtectedRoute>} />
                 <Route path="/gamification" element={<ProtectedRoute><GamificationPage /></ProtectedRoute>} />
                 <Route path="/pipedrive" element={<ProtectedRoute><PipedrivePage /></ProtectedRoute>} />
+                <Route path="/meetime" element={<ProtectedRoute><MeetimePage /></ProtectedRoute>} />
                 <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
