@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.analyze-scripts]
 verify_jwt = false
+
+[functions.sync-meetime]
+verify_jwt = false

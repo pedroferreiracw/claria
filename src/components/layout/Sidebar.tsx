@@ -34,6 +34,7 @@ const baseMenuItems = [
   { icon: BookOpen, label: 'Boas Práticas', path: '/best-practices', key: 'bestPractices' },
   { icon: Trophy, label: 'Gamificação', path: '/gamification', key: 'gamification' },
   { icon: Plug, label: 'Pipedrive', path: '/pipedrive', key: 'pipedrive' },
+  { icon: Plug, label: 'Meetime', path: '/meetime', key: 'meetime' },
   { icon: FileSpreadsheet, label: 'Exportar', path: '/export', key: 'export' },
 ];
 

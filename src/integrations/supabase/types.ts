@@ -306,6 +306,219 @@ export type Database = {
           },
         ]
       }
+      meetime_activities: {
+        Row: {
+          annotation: string | null
+          call_duration_seconds: number | null
+          created_at: string
+          execution_date: string | null
+          id: string
+          meetime_id: string
+          prospection_id: string | null
+          sdr_id: string | null
+          status: string | null
+          synced_at: string
+          type: string | null
+        }
+        Insert: {
+          annotation?: string | null
+          call_duration_seconds?: number | null
+          created_at?: string
+          execution_date?: string | null
+          id?: string
+          meetime_id: string
+          prospection_id?: string | null
+          sdr_id?: string | null
+          status?: string | null
+          synced_at?: string
+          type?: string | null
+        }
+        Update: {
+          annotation?: string | null
+          call_duration_seconds?: number | null
+          created_at?: string
+          execution_date?: string | null
+          id?: string
+          meetime_id?: string
+          prospection_id?: string | null
+          sdr_id?: string | null
+          status?: string | null
+          synced_at?: string
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetime_activities_prospection_id_fkey"
+            columns: ["prospection_id"]
+            isOneToOne: false
+            referencedRelation: "meetime_prospections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meetime_config: {
+        Row: {
+          api_token: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_connected: boolean | null
+          last_sync_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_token?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_connected?: boolean | null
+          last_sync_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_token?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_connected?: boolean | null
+          last_sync_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meetime_leads: {
+        Row: {
+          cadence_name: string | null
+          company: string | null
+          created_at: string
+          email: string | null
+          fit_score: number | null
+          id: string
+          meetime_id: string
+          name: string | null
+          phone: string | null
+          sdr_id: string | null
+          status: string | null
+          synced_at: string
+        }
+        Insert: {
+          cadence_name?: string | null
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          fit_score?: number | null
+          id?: string
+          meetime_id: string
+          name?: string | null
+          phone?: string | null
+          sdr_id?: string | null
+          status?: string | null
+          synced_at?: string
+        }
+        Update: {
+          cadence_name?: string | null
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          fit_score?: number | null
+          id?: string
+          meetime_id?: string
+          name?: string | null
+          phone?: string | null
+          sdr_id?: string | null
+          status?: string | null
+          synced_at?: string
+        }
+        Relationships: []
+      }
+      meetime_meetings: {
+        Row: {
+          created_at: string
+          id: string
+          lead_id: string | null
+          meetime_id: string
+          no_show: boolean | null
+          scheduled_at: string | null
+          sdr_id: string | null
+          status: string | null
+          synced_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          meetime_id: string
+          no_show?: boolean | null
+          scheduled_at?: string | null
+          sdr_id?: string | null
+          status?: string | null
+          synced_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          meetime_id?: string
+          no_show?: boolean | null
+          scheduled_at?: string | null
+          sdr_id?: string | null
+          status?: string | null
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetime_meetings_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "meetime_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meetime_prospections: {
+        Row: {
+          created_at: string
+          finished_at: string | null
+          id: string
+          lead_id: string | null
+          meetime_id: string
+          sdr_id: string | null
+          started_at: string | null
+          status: string | null
+          synced_at: string
+        }
+        Insert: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          lead_id?: string | null
+          meetime_id: string
+          sdr_id?: string | null
+          started_at?: string | null
+          status?: string | null
+          synced_at?: string
+        }
+        Update: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          lead_id?: string | null
+          meetime_id?: string
+          sdr_id?: string | null
+          started_at?: string | null
+          status?: string | null
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetime_prospections_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "meetime_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monthly_scores: {
         Row: {
           average_score: number
