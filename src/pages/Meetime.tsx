@@ -24,6 +24,7 @@ export default function MeetimePage() {
     leads,
     activities,
     meetings,
+    dealFeedbacks,
     isLoading,
     saveConfig,
     isSaving,
@@ -131,6 +132,29 @@ export default function MeetimePage() {
     });
   }, [meetings, sdrFilter, startDate, endDate]);
 
+  // Filter deal feedbacks
+  const filteredDealFeedbacks = useMemo(() => {
+    return dealFeedbacks.filter((df) => {
+      // SDR filter
+      if (sdrFilter !== "all" && df.sdr_id !== sdrFilter) {
+        return false;
+      }
+
+      // Date filters
+      if (startDate && df.meeting_date) {
+        const dfDate = new Date(df.meeting_date);
+        if (dfDate < startDate) return false;
+      }
+
+      if (endDate && df.meeting_date) {
+        const dfDate = new Date(df.meeting_date);
+        if (dfDate > endDate) return false;
+      }
+
+      return true;
+    });
+  }, [dealFeedbacks, sdrFilter, startDate, endDate]);
+
   // Calculate stats
   const stats = useMemo(() => {
     return {
@@ -140,8 +164,11 @@ export default function MeetimePage() {
       totalMeetings: filteredMeetings.length,
       noShowCount: filteredMeetings.filter((m) => m.no_show).length,
       totalActivities: filteredActivities.length,
+      qualifiedCount: filteredDealFeedbacks.filter((df) => df.result === "QUALIFIED").length,
+      unqualifiedCount: filteredDealFeedbacks.filter((df) => df.result === "UNQUALIFIED").length,
+      noContactCount: filteredDealFeedbacks.filter((df) => df.result === "NO_CONTACT").length,
     };
-  }, [filteredLeads, filteredMeetings, filteredActivities]);
+  }, [filteredLeads, filteredMeetings, filteredActivities, filteredDealFeedbacks]);
 
   if (isLoading) {
     return (
@@ -241,6 +268,9 @@ export default function MeetimePage() {
               totalMeetings={stats.totalMeetings}
               noShowCount={stats.noShowCount}
               totalActivities={stats.totalActivities}
+              qualifiedCount={stats.qualifiedCount}
+              unqualifiedCount={stats.unqualifiedCount}
+              noContactCount={stats.noContactCount}
             />
 
             {/* Filters */}
