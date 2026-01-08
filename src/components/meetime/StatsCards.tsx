@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, CalendarCheck, CalendarX, TrendingUp, Activity } from "lucide-react";
+import { Users, CalendarCheck, CalendarX, TrendingUp, Activity, Trophy } from "lucide-react";
 
 interface StatsCardsProps {
   totalLeads: number;
@@ -8,6 +8,10 @@ interface StatsCardsProps {
   totalMeetings: number;
   noShowCount: number;
   totalActivities: number;
+  // New props for deal feedbacks
+  qualifiedCount: number;
+  unqualifiedCount: number;
+  noContactCount: number;
 }
 
 export function StatsCards({
@@ -17,9 +21,21 @@ export function StatsCards({
   totalMeetings,
   noShowCount,
   totalActivities,
+  qualifiedCount,
+  unqualifiedCount,
+  noContactCount,
 }: StatsCardsProps) {
-  const noShowRate = totalMeetings > 0 ? ((noShowCount / totalMeetings) * 100).toFixed(1) : "0";
+  // LTR = Lead to Revenue (won leads / total leads)
   const ltrRate = totalLeads > 0 ? ((wonLeads / totalLeads) * 100).toFixed(1) : "0";
+  
+  // No-show rate based on deal feedbacks (NO_CONTACT)
+  const totalDealFeedbacks = qualifiedCount + unqualifiedCount + noContactCount;
+  const noShowRate = totalDealFeedbacks > 0 
+    ? ((noContactCount / totalDealFeedbacks) * 100).toFixed(1) 
+    : "0";
+
+  // Oportunidades = QUALIFIED deal feedbacks
+  const opportunities = qualifiedCount;
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -54,13 +70,15 @@ export function StatsCards({
       <Card className="glass-card">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Agendamentos
+            Oportunidades
           </CardTitle>
-          <CalendarCheck className="h-4 w-4 text-muted-foreground" />
+          <Trophy className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{totalMeetings}</div>
-          <p className="text-xs text-muted-foreground">Total de reuniões</p>
+          <div className="text-2xl font-bold text-primary">{opportunities}</div>
+          <p className="text-xs text-muted-foreground">
+            Reuniões qualificadas
+          </p>
         </CardContent>
       </Card>
 
@@ -72,7 +90,7 @@ export function StatsCards({
           <CalendarX className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-red-500">{noShowCount}</div>
+          <div className="text-2xl font-bold text-red-500">{noContactCount}</div>
           <p className="text-xs text-muted-foreground">Taxa: {noShowRate}%</p>
         </CardContent>
       </Card>

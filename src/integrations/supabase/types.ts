@@ -386,6 +386,63 @@ export type Database = {
         }
         Relationships: []
       }
+      meetime_deal_feedbacks: {
+        Row: {
+          created_at: string
+          id: string
+          lead_id: string | null
+          meetime_id: string
+          meeting_date: string | null
+          notes: string | null
+          prospection_id: string | null
+          response_date: string | null
+          result: string | null
+          sdr_id: string | null
+          synced_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          meetime_id: string
+          meeting_date?: string | null
+          notes?: string | null
+          prospection_id?: string | null
+          response_date?: string | null
+          result?: string | null
+          sdr_id?: string | null
+          synced_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          meetime_id?: string
+          meeting_date?: string | null
+          notes?: string | null
+          prospection_id?: string | null
+          response_date?: string | null
+          result?: string | null
+          sdr_id?: string | null
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetime_deal_feedbacks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "meetime_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meetime_deal_feedbacks_prospection_id_fkey"
+            columns: ["prospection_id"]
+            isOneToOne: false
+            referencedRelation: "meetime_prospections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meetime_leads: {
         Row: {
           cadence_name: string | null
@@ -479,8 +536,10 @@ export type Database = {
         Row: {
           created_at: string
           finished_at: string | null
+          first_contact_at: string | null
           id: string
           lead_id: string | null
+          lead_time_response_seconds: number | null
           meetime_id: string
           sdr_id: string | null
           started_at: string | null
@@ -490,8 +549,10 @@ export type Database = {
         Insert: {
           created_at?: string
           finished_at?: string | null
+          first_contact_at?: string | null
           id?: string
           lead_id?: string | null
+          lead_time_response_seconds?: number | null
           meetime_id: string
           sdr_id?: string | null
           started_at?: string | null
@@ -501,8 +562,10 @@ export type Database = {
         Update: {
           created_at?: string
           finished_at?: string | null
+          first_contact_at?: string | null
           id?: string
           lead_id?: string | null
+          lead_time_response_seconds?: number | null
           meetime_id?: string
           sdr_id?: string | null
           started_at?: string | null

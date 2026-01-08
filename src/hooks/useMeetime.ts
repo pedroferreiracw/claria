@@ -65,6 +65,20 @@ export interface MeetimeMeeting {
   synced_at: string;
 }
 
+export interface MeetimeDealFeedback {
+  id: string;
+  meetime_id: string;
+  lead_id: string | null;
+  prospection_id: string | null;
+  sdr_id: string | null;
+  result: string | null; // 'QUALIFIED', 'UNQUALIFIED', 'NO_CONTACT'
+  meeting_date: string | null;
+  response_date: string | null;
+  notes: string | null;
+  created_at: string;
+  synced_at: string;
+}
+
 export function useMeetimeConfig() {
   return useQuery({
     queryKey: ["meetime-config"],
@@ -184,6 +198,21 @@ export function useMeetimeMeetings() {
   });
 }
 
+export function useMeetimeDealFeedbacks() {
+  return useQuery({
+    queryKey: ["meetime-deal-feedbacks"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("meetime_deal_feedbacks")
+        .select("*")
+        .order("synced_at", { ascending: false });
+
+      if (error) throw error;
+      return data as MeetimeDealFeedback[];
+    },
+  });
+}
+
 export function useSyncMeetime() {
   const queryClient = useQueryClient();
 
@@ -212,10 +241,11 @@ export function useSyncMeetime() {
       queryClient.invalidateQueries({ queryKey: ["meetime-prospections"] });
       queryClient.invalidateQueries({ queryKey: ["meetime-activities"] });
       queryClient.invalidateQueries({ queryKey: ["meetime-meetings"] });
+      queryClient.invalidateQueries({ queryKey: ["meetime-deal-feedbacks"] });
       queryClient.invalidateQueries({ queryKey: ["meetime-config"] });
       
       toast.success(
-        `Sincronização concluída! ${data.synced?.leads || 0} leads, ${data.synced?.activities || 0} atividades, ${data.synced?.meetings || 0} reuniões sincronizadas.`
+        `Sincronização concluída! ${data.synced?.leads || 0} leads, ${data.synced?.activities || 0} atividades, ${data.synced?.dealFeedbacks || 0} oportunidades sincronizadas.`
       );
     },
     onError: (error) => {
@@ -231,6 +261,7 @@ export function useMeetime() {
   const prospections = useMeetimeProspections();
   const activities = useMeetimeActivities();
   const meetings = useMeetimeMeetings();
+  const dealFeedbacks = useMeetimeDealFeedbacks();
   const saveConfig = useSaveMeetimeConfig();
   const syncMeetime = useSyncMeetime();
 
@@ -240,12 +271,14 @@ export function useMeetime() {
     prospections: prospections.data || [],
     activities: activities.data || [],
     meetings: meetings.data || [],
+    dealFeedbacks: dealFeedbacks.data || [],
     isLoading:
       config.isLoading ||
       leads.isLoading ||
       prospections.isLoading ||
       activities.isLoading ||
-      meetings.isLoading,
+      meetings.isLoading ||
+      dealFeedbacks.isLoading,
     saveConfig: saveConfig.mutate,
     isSaving: saveConfig.isPending,
     syncMeetime: syncMeetime.mutate,
