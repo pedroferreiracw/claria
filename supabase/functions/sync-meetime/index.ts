@@ -13,6 +13,7 @@ interface MeetimeLead {
   phone?: string;
   status: string;
   fitScore?: number;
+  fit_score?: number;
   cadence?: { name: string };
   user?: { id: number; email: string; name: string };
 }
@@ -22,8 +23,12 @@ interface MeetimeProspection {
   lead: { id: number };
   user: { id: number; email: string; name: string };
   status: string;
-  startedAt: string;
+  startedAt?: string;
+  started_at?: string;
+  startDate?: string;
+  start_date?: string;
   finishedAt?: string;
+  finished_at?: string;
 }
 
 interface MeetimeActivity {
@@ -32,20 +37,76 @@ interface MeetimeActivity {
   user: { id: number; email: string; name: string };
   type: string;
   status: string;
-  executionDate: string;
+  executionDate?: string;
+  execution_date?: string;
   annotation?: string;
+  activity_annotation?: string;
   callDurationSeconds?: number;
+  call_duration_seconds?: number;
 }
 
-interface MeetimeDealFeedback {
+interface MeetimeFeedback {
   id: number;
   lead?: { id: number };
   prospection?: { id: number };
   user: { id: number; email: string; name: string };
-  result: string; // 'QUALIFIED', 'UNQUALIFIED', 'NO_CONTACT'
+  result?: string;
+  outcome?: string;
   meetingDate?: string;
+  meeting_date?: string;
   responseDate?: string;
+  response_date?: string;
   notes?: string;
+}
+
+async function fetchAllPages(
+  baseUrl: string,
+  path: string,
+  headers: Record<string, string>,
+  limit = 100
+): Promise<any[]> {
+  const allItems: any[] = [];
+  let start = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const separator = path.includes('?') ? '&' : '?';
+    const url = `${baseUrl}${path}${separator}limit=${limit}&start=${start}`;
+    console.log(`[sync-meetime] Fetching: ${url}`);
+
+    try {
+      const response = await fetch(url, { headers });
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        console.error(`[sync-meetime] Error fetching ${path}: ${response.status} - ${responseText}`);
+        break;
+      }
+
+      const data = JSON.parse(responseText);
+      const items = data.data || data.items || (Array.isArray(data) ? data : []);
+      
+      console.log(`[sync-meetime] Got ${items.length} items from ${path} (start=${start})`);
+
+      if (items.length === 0) {
+        hasMore = false;
+      } else {
+        allItems.push(...items);
+        start += limit;
+        
+        // Check if we got less than limit, meaning no more pages
+        if (items.length < limit) {
+          hasMore = false;
+        }
+      }
+    } catch (error) {
+      console.error(`[sync-meetime] Exception fetching ${path}:`, error);
+      break;
+    }
+  }
+
+  console.log(`[sync-meetime] Total items from ${path}: ${allItems.length}`);
+  return allItems;
 }
 
 Deno.serve(async (req) => {
@@ -122,7 +183,26 @@ Deno.serve(async (req) => {
       'Content-Type': 'application/json',
     };
 
-    console.log('[sync-meetime] Fetching data from Meetime API...');
+    console.log('[sync-meetime] Starting sync from Meetime API...');
+
+    // Validate token by fetching company info
+    try {
+      const companyResponse = await fetch(`${baseUrl}/company`, { headers });
+      if (!companyResponse.ok) {
+        const errorText = await companyResponse.text();
+        console.error('[sync-meetime] Token validation failed:', companyResponse.status, errorText);
+        return new Response(JSON.stringify({ 
+          error: 'Token inválido ou sem permissão',
+          details: errorText 
+        }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      console.log('[sync-meetime] Token validated successfully');
+    } catch (error) {
+      console.error('[sync-meetime] Error validating token:', error);
+    }
 
     // Get SDRs for mapping
     const { data: sdrs } = await supabase.from('sdrs').select('id, name');
@@ -143,216 +223,165 @@ Deno.serve(async (req) => {
     let syncedLeads = 0;
     let syncedProspections = 0;
     let syncedActivities = 0;
-    let syncedDealFeedbacks = 0;
+    let syncedFeedbacks = 0;
+    let errors: string[] = [];
 
     // Sync Leads
     try {
-      console.log('[sync-meetime] Fetching leads...');
-      const leadsUrl = `${baseUrl}/leads?limit=500`;
-      console.log('[sync-meetime] Leads URL:', leadsUrl);
+      console.log('[sync-meetime] Syncing leads...');
+      const leads = await fetchAllPages(baseUrl, '/leads', headers, 100);
       
-      const leadsResponse = await fetch(leadsUrl, { headers });
-      const leadsResponseText = await leadsResponse.text();
-      
-      console.log('[sync-meetime] Leads response status:', leadsResponse.status);
-      
-      if (leadsResponse.ok) {
-        const leadsData = JSON.parse(leadsResponseText);
-        const leads = leadsData.data || leadsData.items || leadsData || [];
-        
-        console.log(`[sync-meetime] Found ${Array.isArray(leads) ? leads.length : 0} leads`);
-        
-        if (Array.isArray(leads) && leads.length > 0) {
-          const leadsToUpsert = leads.map((lead: MeetimeLead) => ({
-            meetime_id: String(lead.id),
-            sdr_id: findSdrId(lead.user?.name),
-            name: lead.name,
-            email: lead.email,
-            company: lead.company?.name || null,
-            phone: lead.phone || null,
-            status: lead.status || 'active',
-            fit_score: lead.fitScore || null,
-            cadence_name: lead.cadence?.name || null,
-            synced_at: new Date().toISOString(),
-          }));
+      if (leads.length > 0) {
+        const leadsToUpsert = leads.map((lead: MeetimeLead) => ({
+          meetime_id: String(lead.id),
+          sdr_id: findSdrId(lead.user?.name),
+          name: lead.name,
+          email: lead.email,
+          company: lead.company?.name || null,
+          phone: lead.phone || null,
+          status: lead.status || 'active',
+          fit_score: lead.fitScore ?? lead.fit_score ?? null,
+          cadence_name: lead.cadence?.name || null,
+          synced_at: new Date().toISOString(),
+        }));
 
-          const { error: upsertError } = await supabase
-            .from('meetime_leads')
-            .upsert(leadsToUpsert, { onConflict: 'meetime_id' });
+        const { error: upsertError } = await supabase
+          .from('meetime_leads')
+          .upsert(leadsToUpsert, { onConflict: 'meetime_id' });
 
-          if (upsertError) {
-            console.error('[sync-meetime] Error upserting leads:', upsertError);
-          } else {
-            syncedLeads = leads.length;
-          }
+        if (upsertError) {
+          console.error('[sync-meetime] Error upserting leads:', upsertError);
+          errors.push(`Leads: ${upsertError.message}`);
+        } else {
+          syncedLeads = leads.length;
         }
-      } else {
-        console.error('[sync-meetime] Leads fetch failed:', leadsResponse.status, leadsResponseText);
       }
     } catch (error) {
       console.error('[sync-meetime] Error syncing leads:', error);
+      errors.push(`Leads: ${String(error)}`);
     }
 
     // Sync Prospections
     try {
-      console.log('[sync-meetime] Fetching prospections...');
-      const prospectionsUrl = `${baseUrl}/prospections?limit=500`;
-      console.log('[sync-meetime] Prospections URL:', prospectionsUrl);
+      console.log('[sync-meetime] Syncing prospections...');
+      const prospections = await fetchAllPages(baseUrl, '/prospections', headers, 100);
       
-      const prospectionsResponse = await fetch(prospectionsUrl, { headers });
-      const prospectionsResponseText = await prospectionsResponse.text();
-      
-      console.log('[sync-meetime] Prospections response status:', prospectionsResponse.status);
-      
-      if (prospectionsResponse.ok) {
-        const prospectionsData = JSON.parse(prospectionsResponseText);
-        const prospections = prospectionsData.data || prospectionsData.items || prospectionsData || [];
-        
-        console.log(`[sync-meetime] Found ${Array.isArray(prospections) ? prospections.length : 0} prospections`);
-        
-        if (Array.isArray(prospections) && prospections.length > 0) {
-          // Get lead IDs mapping
-          const { data: existingLeads } = await supabase
-            .from('meetime_leads')
-            .select('id, meetime_id');
-          const leadIdMap = new Map(existingLeads?.map(l => [l.meetime_id, l.id]) || []);
+      if (prospections.length > 0) {
+        // Get lead IDs mapping
+        const { data: existingLeads } = await supabase
+          .from('meetime_leads')
+          .select('id, meetime_id');
+        const leadIdMap = new Map(existingLeads?.map(l => [l.meetime_id, l.id]) || []);
 
-          const prospectionsToUpsert = prospections.map((p: MeetimeProspection) => ({
-            meetime_id: String(p.id),
-            lead_id: leadIdMap.get(String(p.lead?.id)) || null,
-            sdr_id: findSdrId(p.user?.name),
-            status: p.status || 'active',
-            started_at: p.startedAt || null,
-            finished_at: p.finishedAt || null,
-            synced_at: new Date().toISOString(),
-          }));
+        const prospectionsToUpsert = prospections.map((p: MeetimeProspection) => ({
+          meetime_id: String(p.id),
+          lead_id: leadIdMap.get(String(p.lead?.id)) || null,
+          sdr_id: findSdrId(p.user?.name),
+          status: p.status || 'active',
+          started_at: p.startedAt ?? p.started_at ?? p.startDate ?? p.start_date ?? null,
+          finished_at: p.finishedAt ?? p.finished_at ?? null,
+          synced_at: new Date().toISOString(),
+        }));
 
-          const { error: upsertError } = await supabase
-            .from('meetime_prospections')
-            .upsert(prospectionsToUpsert, { onConflict: 'meetime_id' });
+        const { error: upsertError } = await supabase
+          .from('meetime_prospections')
+          .upsert(prospectionsToUpsert, { onConflict: 'meetime_id' });
 
-          if (upsertError) {
-            console.error('[sync-meetime] Error upserting prospections:', upsertError);
-          } else {
-            syncedProspections = prospections.length;
-          }
+        if (upsertError) {
+          console.error('[sync-meetime] Error upserting prospections:', upsertError);
+          errors.push(`Prospections: ${upsertError.message}`);
+        } else {
+          syncedProspections = prospections.length;
         }
-      } else {
-        console.error('[sync-meetime] Prospections fetch failed:', prospectionsResponse.status, prospectionsResponseText);
       }
     } catch (error) {
       console.error('[sync-meetime] Error syncing prospections:', error);
+      errors.push(`Prospections: ${String(error)}`);
     }
 
-    // Sync Activities (Prospection Activities)
+    // Sync Activities (correct endpoint: /prospections/activities)
     try {
-      console.log('[sync-meetime] Fetching activities...');
-      const activitiesUrl = `${baseUrl}/prospection-activities?limit=500`;
-      console.log('[sync-meetime] Activities URL:', activitiesUrl);
+      console.log('[sync-meetime] Syncing activities...');
+      const activities = await fetchAllPages(baseUrl, '/prospections/activities', headers, 100);
       
-      const activitiesResponse = await fetch(activitiesUrl, { headers });
-      const activitiesResponseText = await activitiesResponse.text();
-      
-      console.log('[sync-meetime] Activities response status:', activitiesResponse.status);
-      
-      if (activitiesResponse.ok) {
-        const activitiesData = JSON.parse(activitiesResponseText);
-        const activities = activitiesData.data || activitiesData.items || activitiesData || [];
-        
-        console.log(`[sync-meetime] Found ${Array.isArray(activities) ? activities.length : 0} activities`);
-        
-        if (Array.isArray(activities) && activities.length > 0) {
-          // Get prospection IDs mapping
-          const { data: existingProspections } = await supabase
-            .from('meetime_prospections')
-            .select('id, meetime_id');
-          const prospectionIdMap = new Map(existingProspections?.map(p => [p.meetime_id, p.id]) || []);
+      if (activities.length > 0) {
+        // Get prospection IDs mapping
+        const { data: existingProspections } = await supabase
+          .from('meetime_prospections')
+          .select('id, meetime_id');
+        const prospectionIdMap = new Map(existingProspections?.map(p => [p.meetime_id, p.id]) || []);
 
-          const activitiesToUpsert = activities.map((a: MeetimeActivity) => ({
-            meetime_id: String(a.id),
-            prospection_id: prospectionIdMap.get(String(a.prospection?.id)) || null,
-            sdr_id: findSdrId(a.user?.name),
-            type: a.type || null,
-            status: a.status || null,
-            execution_date: a.executionDate || null,
-            annotation: a.annotation || null,
-            call_duration_seconds: a.callDurationSeconds || null,
-            synced_at: new Date().toISOString(),
-          }));
+        const activitiesToUpsert = activities.map((a: MeetimeActivity) => ({
+          meetime_id: String(a.id),
+          prospection_id: prospectionIdMap.get(String(a.prospection?.id)) || null,
+          sdr_id: findSdrId(a.user?.name),
+          type: a.type || null,
+          status: a.status || null,
+          execution_date: a.executionDate ?? a.execution_date ?? null,
+          annotation: a.annotation ?? a.activity_annotation ?? null,
+          call_duration_seconds: a.callDurationSeconds ?? a.call_duration_seconds ?? null,
+          synced_at: new Date().toISOString(),
+        }));
 
-          const { error: upsertError } = await supabase
-            .from('meetime_activities')
-            .upsert(activitiesToUpsert, { onConflict: 'meetime_id' });
+        const { error: upsertError } = await supabase
+          .from('meetime_activities')
+          .upsert(activitiesToUpsert, { onConflict: 'meetime_id' });
 
-          if (upsertError) {
-            console.error('[sync-meetime] Error upserting activities:', upsertError);
-          } else {
-            syncedActivities = activities.length;
-          }
+        if (upsertError) {
+          console.error('[sync-meetime] Error upserting activities:', upsertError);
+          errors.push(`Activities: ${upsertError.message}`);
+        } else {
+          syncedActivities = activities.length;
         }
-      } else {
-        console.error('[sync-meetime] Activities fetch failed:', activitiesResponse.status, activitiesResponseText);
       }
     } catch (error) {
       console.error('[sync-meetime] Error syncing activities:', error);
+      errors.push(`Activities: ${String(error)}`);
     }
 
-    // Sync Deal Feedbacks (Oportunidades = Agendamentos qualificados)
+    // Sync Feedbacks (Oportunidades - correct endpoint: /feedbacks)
     try {
-      console.log('[sync-meetime] Fetching deal-feedbacks...');
-      const dealFeedbacksUrl = `${baseUrl}/deal-feedbacks?limit=500`;
-      console.log('[sync-meetime] Deal Feedbacks URL:', dealFeedbacksUrl);
+      console.log('[sync-meetime] Syncing feedbacks (oportunidades)...');
+      const feedbacks = await fetchAllPages(baseUrl, '/feedbacks', headers, 100);
       
-      const dealFeedbacksResponse = await fetch(dealFeedbacksUrl, { headers });
-      const dealFeedbacksResponseText = await dealFeedbacksResponse.text();
-      
-      console.log('[sync-meetime] Deal Feedbacks response status:', dealFeedbacksResponse.status);
-      
-      if (dealFeedbacksResponse.ok) {
-        const dealFeedbacksData = JSON.parse(dealFeedbacksResponseText);
-        const dealFeedbacks = dealFeedbacksData.data || dealFeedbacksData.items || dealFeedbacksData || [];
-        
-        console.log(`[sync-meetime] Found ${Array.isArray(dealFeedbacks) ? dealFeedbacks.length : 0} deal feedbacks`);
-        
-        if (Array.isArray(dealFeedbacks) && dealFeedbacks.length > 0) {
-          // Get lead and prospection IDs mapping
-          const { data: existingLeads } = await supabase
-            .from('meetime_leads')
-            .select('id, meetime_id');
-          const leadIdMap = new Map(existingLeads?.map(l => [l.meetime_id, l.id]) || []);
+      if (feedbacks.length > 0) {
+        // Get lead and prospection IDs mapping
+        const { data: existingLeads } = await supabase
+          .from('meetime_leads')
+          .select('id, meetime_id');
+        const leadIdMap = new Map(existingLeads?.map(l => [l.meetime_id, l.id]) || []);
 
-          const { data: existingProspections } = await supabase
-            .from('meetime_prospections')
-            .select('id, meetime_id');
-          const prospectionIdMap = new Map(existingProspections?.map(p => [p.meetime_id, p.id]) || []);
+        const { data: existingProspections } = await supabase
+          .from('meetime_prospections')
+          .select('id, meetime_id');
+        const prospectionIdMap = new Map(existingProspections?.map(p => [p.meetime_id, p.id]) || []);
 
-          const dealFeedbacksToUpsert = dealFeedbacks.map((df: MeetimeDealFeedback) => ({
-            meetime_id: String(df.id),
-            lead_id: leadIdMap.get(String(df.lead?.id)) || null,
-            prospection_id: prospectionIdMap.get(String(df.prospection?.id)) || null,
-            sdr_id: findSdrId(df.user?.name),
-            result: df.result || null,
-            meeting_date: df.meetingDate || null,
-            response_date: df.responseDate || null,
-            notes: df.notes || null,
-            synced_at: new Date().toISOString(),
-          }));
+        const feedbacksToUpsert = feedbacks.map((f: MeetimeFeedback) => ({
+          meetime_id: String(f.id),
+          lead_id: leadIdMap.get(String(f.lead?.id)) || null,
+          prospection_id: prospectionIdMap.get(String(f.prospection?.id)) || null,
+          sdr_id: findSdrId(f.user?.name),
+          result: f.result ?? f.outcome ?? null,
+          meeting_date: f.meetingDate ?? f.meeting_date ?? null,
+          response_date: f.responseDate ?? f.response_date ?? null,
+          notes: f.notes || null,
+          synced_at: new Date().toISOString(),
+        }));
 
-          const { error: upsertError } = await supabase
-            .from('meetime_deal_feedbacks')
-            .upsert(dealFeedbacksToUpsert, { onConflict: 'meetime_id' });
+        const { error: upsertError } = await supabase
+          .from('meetime_deal_feedbacks')
+          .upsert(feedbacksToUpsert, { onConflict: 'meetime_id' });
 
-          if (upsertError) {
-            console.error('[sync-meetime] Error upserting deal feedbacks:', upsertError);
-          } else {
-            syncedDealFeedbacks = dealFeedbacks.length;
-          }
+        if (upsertError) {
+          console.error('[sync-meetime] Error upserting feedbacks:', upsertError);
+          errors.push(`Feedbacks: ${upsertError.message}`);
+        } else {
+          syncedFeedbacks = feedbacks.length;
         }
-      } else {
-        console.error('[sync-meetime] Deal Feedbacks fetch failed:', dealFeedbacksResponse.status, dealFeedbacksResponseText);
       }
     } catch (error) {
-      console.error('[sync-meetime] Error syncing deal feedbacks:', error);
+      console.error('[sync-meetime] Error syncing feedbacks:', error);
+      errors.push(`Feedbacks: ${String(error)}`);
     }
 
     // Update last sync timestamp
@@ -364,18 +393,22 @@ Deno.serve(async (req) => {
       })
       .eq('id', config.id);
 
-    console.log('[sync-meetime] Sync completed successfully');
-    console.log('[sync-meetime] Summary:', { syncedLeads, syncedProspections, syncedActivities, syncedDealFeedbacks });
+    const totalSynced = syncedLeads + syncedProspections + syncedActivities + syncedFeedbacks;
+    const success = totalSynced > 0 || errors.length === 0;
+
+    console.log('[sync-meetime] Sync completed');
+    console.log('[sync-meetime] Summary:', { syncedLeads, syncedProspections, syncedActivities, syncedFeedbacks, errors });
 
     return new Response(
       JSON.stringify({
-        success: true,
+        success,
         synced: {
           leads: syncedLeads,
           prospections: syncedProspections,
           activities: syncedActivities,
-          dealFeedbacks: syncedDealFeedbacks,
+          feedbacks: syncedFeedbacks,
         },
+        errors: errors.length > 0 ? errors : undefined,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

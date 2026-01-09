@@ -15,7 +15,7 @@ import { useSDRs } from "@/hooks/useSDRs";
 import { MeetimeFilters } from "@/components/meetime/MeetimeFilters";
 import { LeadsTable } from "@/components/meetime/LeadsTable";
 import { ActivitiesTable } from "@/components/meetime/ActivitiesTable";
-import { MeetingsTable } from "@/components/meetime/MeetingsTable";
+import { DealFeedbacksTable } from "@/components/meetime/DealFeedbacksTable";
 import { StatsCards } from "@/components/meetime/StatsCards";
 
 export default function MeetimePage() {
@@ -298,7 +298,7 @@ export default function MeetimePage() {
               <TabsList>
                 <TabsTrigger value="leads">Leads ({filteredLeads.length})</TabsTrigger>
                 <TabsTrigger value="activities">Atividades ({filteredActivities.length})</TabsTrigger>
-                <TabsTrigger value="meetings">Agendamentos ({filteredMeetings.length})</TabsTrigger>
+                <TabsTrigger value="oportunidades">Oportunidades ({filteredDealFeedbacks.length})</TabsTrigger>
               </TabsList>
 
               <TabsContent value="leads">
@@ -317,10 +317,10 @@ export default function MeetimePage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="meetings">
+              <TabsContent value="oportunidades">
                 <Card className="glass-card">
                   <CardContent className="pt-6">
-                    <MeetingsTable meetings={filteredMeetings} sdrs={sdrs} />
+                    <DealFeedbacksTable feedbacks={filteredDealFeedbacks} sdrs={sdrs} />
                   </CardContent>
                 </Card>
               </TabsContent>
