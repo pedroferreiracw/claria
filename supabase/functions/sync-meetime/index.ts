@@ -59,31 +59,36 @@ interface MeetimeFeedback {
   notes?: string;
 }
 
+// Max items to fetch per entity to avoid worker limits
+const MAX_ITEMS_PER_ENTITY = 1000;
+const BATCH_SIZE = 100;
+
 async function fetchAllPages(
   baseUrl: string,
   path: string,
   headers: Record<string, string>,
-  limit = 100
+  limit = BATCH_SIZE,
+  maxItems = MAX_ITEMS_PER_ENTITY
 ): Promise<any[]> {
   const allItems: any[] = [];
   let start = 0;
   let hasMore = true;
 
-  while (hasMore) {
+  while (hasMore && allItems.length < maxItems) {
     const separator = path.includes('?') ? '&' : '?';
     const url = `${baseUrl}${path}${separator}limit=${limit}&start=${start}`;
     console.log(`[sync-meetime] Fetching: ${url}`);
 
     try {
       const response = await fetch(url, { headers });
-      const responseText = await response.text();
-
+      
       if (!response.ok) {
+        const responseText = await response.text();
         console.error(`[sync-meetime] Error fetching ${path}: ${response.status} - ${responseText}`);
         break;
       }
 
-      const data = JSON.parse(responseText);
+      const data = await response.json();
       const items = data.data || data.items || (Array.isArray(data) ? data : []);
       
       console.log(`[sync-meetime] Got ${items.length} items from ${path} (start=${start})`);
@@ -91,11 +96,12 @@ async function fetchAllPages(
       if (items.length === 0) {
         hasMore = false;
       } else {
-        allItems.push(...items);
+        // Only add items up to maxItems limit
+        const remaining = maxItems - allItems.length;
+        allItems.push(...items.slice(0, remaining));
         start += limit;
         
-        // Check if we got less than limit, meaning no more pages
-        if (items.length < limit) {
+        if (items.length < limit || allItems.length >= maxItems) {
           hasMore = false;
         }
       }
@@ -105,7 +111,7 @@ async function fetchAllPages(
     }
   }
 
-  console.log(`[sync-meetime] Total items from ${path}: ${allItems.length}`);
+  console.log(`[sync-meetime] Total items from ${path}: ${allItems.length}${allItems.length >= maxItems ? ' (max limit reached)' : ''}`);
   return allItems;
 }
 
@@ -229,7 +235,7 @@ Deno.serve(async (req) => {
     // Sync Leads
     try {
       console.log('[sync-meetime] Syncing leads...');
-      const leads = await fetchAllPages(baseUrl, '/leads', headers, 100);
+      const leads = await fetchAllPages(baseUrl, '/leads', headers);
       
       if (leads.length > 0) {
         const leadsToUpsert = leads.map((lead: MeetimeLead) => ({
@@ -264,7 +270,7 @@ Deno.serve(async (req) => {
     // Sync Prospections
     try {
       console.log('[sync-meetime] Syncing prospections...');
-      const prospections = await fetchAllPages(baseUrl, '/prospections', headers, 100);
+      const prospections = await fetchAllPages(baseUrl, '/prospections', headers);
       
       if (prospections.length > 0) {
         // Get lead IDs mapping
@@ -302,7 +308,7 @@ Deno.serve(async (req) => {
     // Sync Activities (correct endpoint: /prospections/activities)
     try {
       console.log('[sync-meetime] Syncing activities...');
-      const activities = await fetchAllPages(baseUrl, '/prospections/activities', headers, 100);
+      const activities = await fetchAllPages(baseUrl, '/prospections/activities', headers);
       
       if (activities.length > 0) {
         // Get prospection IDs mapping
@@ -342,7 +348,7 @@ Deno.serve(async (req) => {
     // Sync Feedbacks (Oportunidades - correct endpoint: /feedbacks)
     try {
       console.log('[sync-meetime] Syncing feedbacks (oportunidades)...');
-      const feedbacks = await fetchAllPages(baseUrl, '/feedbacks', headers, 100);
+      const feedbacks = await fetchAllPages(baseUrl, '/feedbacks', headers);
       
       if (feedbacks.length > 0) {
         // Get lead and prospection IDs mapping
