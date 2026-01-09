@@ -209,9 +209,24 @@ Deno.serve(async (req) => {
       console.error('[sync-meetime] Error validating token:', error);
     }
 
-    // Get SDRs for mapping
+    // Get SDRs for mapping - ONLY sync data for registered SDRs
     const { data: sdrs } = await supabase.from('sdrs').select('id, name');
-    const sdrMap = new Map(sdrs?.map(s => [s.name.toLowerCase(), s.id]) || []);
+    
+    if (!sdrs || sdrs.length === 0) {
+      console.log('[sync-meetime] No SDRs registered, nothing to sync');
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'Nenhum SDR cadastrado. Cadastre SDRs primeiro.',
+        synced: { leads: 0, prospections: 0, activities: 0, feedbacks: 0 }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const sdrNames = sdrs.map(s => s.name);
+    const sdrMap = new Map(sdrs.map(s => [s.name.toLowerCase(), s.id]));
+    
+    console.log(`[sync-meetime] Will sync data for ${sdrs.length} SDRs: ${sdrNames.join(', ')}`);
 
     // Helper function to find SDR by name
     const findSdrId = (userName: string | undefined): string | null => {
@@ -225,17 +240,32 @@ Deno.serve(async (req) => {
       return null;
     };
 
+    // Check if item belongs to a registered SDR
+    const belongsToRegisteredSDR = (userName: string | undefined): boolean => {
+      return findSdrId(userName) !== null;
+    };
+
     let syncedLeads = 0;
     let syncedProspections = 0;
     let syncedActivities = 0;
     let syncedFeedbacks = 0;
     let errors: string[] = [];
 
-    // Sync Leads
+    // Sync Leads - only for registered SDRs
     try {
       console.log('[sync-meetime] Syncing leads...');
       syncedLeads = await forEachPage<MeetimeLead>(baseUrl, '/leads', headers, async (page) => {
-        const leadsToUpsert = page.map((lead) => ({
+        // Filter only leads that belong to registered SDRs
+        const filteredPage = page.filter(lead => belongsToRegisteredSDR(lead.user?.name));
+        
+        if (filteredPage.length === 0) {
+          console.log('[sync-meetime] No leads for registered SDRs in this page');
+          return;
+        }
+
+        console.log(`[sync-meetime] Processing ${filteredPage.length}/${page.length} leads for registered SDRs`);
+
+        const leadsToUpsert = filteredPage.map((lead) => ({
           meetime_id: String(lead.id),
           sdr_id: findSdrId(lead.user?.name),
           name: lead.name,
@@ -259,12 +289,22 @@ Deno.serve(async (req) => {
       errors.push(`Leads: ${String(error)}`);
     }
 
-    // Sync Prospections
+    // Sync Prospections - only for registered SDRs
     try {
       console.log('[sync-meetime] Syncing prospections...');
       syncedProspections = await forEachPage<MeetimeProspection>(baseUrl, '/prospections', headers, async (page) => {
+        // Filter only prospections that belong to registered SDRs
+        const filteredPage = page.filter(p => belongsToRegisteredSDR(p.user?.name));
+        
+        if (filteredPage.length === 0) {
+          console.log('[sync-meetime] No prospections for registered SDRs in this page');
+          return;
+        }
+
+        console.log(`[sync-meetime] Processing ${filteredPage.length}/${page.length} prospections for registered SDRs`);
+
         const leadMeetimeIds = Array.from(
-          new Set(page.map((p) => String(p.lead?.id)).filter((id) => id && id !== 'undefined'))
+          new Set(filteredPage.map((p) => String(p.lead?.id)).filter((id) => id && id !== 'undefined'))
         );
 
         const leadIdMap = new Map<string, string>();
@@ -278,7 +318,7 @@ Deno.serve(async (req) => {
           (leadsForPage || []).forEach((l: any) => leadIdMap.set(l.meetime_id, l.id));
         }
 
-        const prospectionsToUpsert = page.map((p) => ({
+        const prospectionsToUpsert = filteredPage.map((p) => ({
           meetime_id: String(p.id),
           lead_id: leadIdMap.get(String(p.lead?.id)) || null,
           sdr_id: findSdrId(p.user?.name),
@@ -299,7 +339,7 @@ Deno.serve(async (req) => {
       errors.push(`Prospections: ${String(error)}`);
     }
 
-    // Sync Activities (correct endpoint: /prospections/activities)
+    // Sync Activities - only for registered SDRs
     try {
       console.log('[sync-meetime] Syncing activities...');
       syncedActivities = await forEachPage<MeetimeActivity>(
@@ -307,8 +347,18 @@ Deno.serve(async (req) => {
         '/prospections/activities',
         headers,
         async (page) => {
+          // Filter only activities that belong to registered SDRs
+          const filteredPage = page.filter(a => belongsToRegisteredSDR(a.user?.name));
+          
+          if (filteredPage.length === 0) {
+            console.log('[sync-meetime] No activities for registered SDRs in this page');
+            return;
+          }
+
+          console.log(`[sync-meetime] Processing ${filteredPage.length}/${page.length} activities for registered SDRs`);
+
           const prospectionMeetimeIds = Array.from(
-            new Set(page.map((a) => String(a.prospection?.id)).filter((id) => id && id !== 'undefined'))
+            new Set(filteredPage.map((a) => String(a.prospection?.id)).filter((id) => id && id !== 'undefined'))
           );
 
           const prospectionIdMap = new Map<string, string>();
@@ -322,7 +372,7 @@ Deno.serve(async (req) => {
             (prospectionsForPage || []).forEach((p: any) => prospectionIdMap.set(p.meetime_id, p.id));
           }
 
-          const activitiesToUpsert = page.map((a) => ({
+          const activitiesToUpsert = filteredPage.map((a) => ({
             meetime_id: String(a.id),
             prospection_id: prospectionIdMap.get(String(a.prospection?.id)) || null,
             sdr_id: findSdrId(a.user?.name),
@@ -346,15 +396,25 @@ Deno.serve(async (req) => {
       errors.push(`Activities: ${String(error)}`);
     }
 
-    // Sync Feedbacks (Oportunidades - correct endpoint: /feedbacks)
+    // Sync Feedbacks - only for registered SDRs
     try {
       console.log('[sync-meetime] Syncing feedbacks (oportunidades)...');
       syncedFeedbacks = await forEachPage<MeetimeFeedback>(baseUrl, '/feedbacks', headers, async (page) => {
+        // Filter only feedbacks that belong to registered SDRs
+        const filteredPage = page.filter(f => belongsToRegisteredSDR(f.user?.name));
+        
+        if (filteredPage.length === 0) {
+          console.log('[sync-meetime] No feedbacks for registered SDRs in this page');
+          return;
+        }
+
+        console.log(`[sync-meetime] Processing ${filteredPage.length}/${page.length} feedbacks for registered SDRs`);
+
         const leadMeetimeIds = Array.from(
-          new Set(page.map((f) => String(f.lead?.id)).filter((id) => id && id !== 'undefined'))
+          new Set(filteredPage.map((f) => String(f.lead?.id)).filter((id) => id && id !== 'undefined'))
         );
         const prospectionMeetimeIds = Array.from(
-          new Set(page.map((f) => String(f.prospection?.id)).filter((id) => id && id !== 'undefined'))
+          new Set(filteredPage.map((f) => String(f.prospection?.id)).filter((id) => id && id !== 'undefined'))
         );
 
         const leadIdMap = new Map<string, string>();
@@ -379,7 +439,7 @@ Deno.serve(async (req) => {
           (prospectionsForPage || []).forEach((p: any) => prospectionIdMap.set(p.meetime_id, p.id));
         }
 
-        const feedbacksToUpsert = page.map((f) => ({
+        const feedbacksToUpsert = filteredPage.map((f) => ({
           meetime_id: String(f.id),
           lead_id: leadIdMap.get(String(f.lead?.id)) || null,
           prospection_id: prospectionIdMap.get(String(f.prospection?.id)) || null,
