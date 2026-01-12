@@ -14,7 +14,8 @@ import {
   GitCompare,
   BookOpen,
   Trophy,
-  Plug
+  Plug,
+  Video
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -27,7 +28,9 @@ import { toast } from 'sonner';
 const baseMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', key: 'dashboard' },
   { icon: Users, label: 'SDRs', path: '/sdrs', key: 'sdrs' },
-  { icon: ClipboardCheck, label: 'Avaliações', path: '/evaluations', key: 'evaluations' },
+  { icon: ClipboardCheck, label: 'Avaliações SDR', path: '/evaluations', key: 'evaluations' },
+  { icon: Users, label: 'Closers', path: '/closers', key: 'closers' },
+  { icon: Video, label: 'Avaliações Closer', path: '/closer-evaluations', key: 'closerEvaluations' },
   { icon: Target, label: 'Metas', path: '/goals', key: 'goals' },
   { icon: TrendingUp, label: 'PDI', path: '/development', key: 'development' },
   { icon: GitCompare, label: 'Comparar', path: '/compare', key: 'compare' },

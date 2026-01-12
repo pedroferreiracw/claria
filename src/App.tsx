@@ -20,6 +20,8 @@ import BestPracticesPage from "./pages/BestPractices";
 import GamificationPage from "./pages/Gamification";
 import PipedrivePage from "./pages/Pipedrive";
 import MeetimePage from "./pages/Meetime";
+import ClosersPage from "./pages/Closers";
+import CloserEvaluationsPage from "./pages/CloserEvaluations";
 import AuthPage from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -39,6 +41,8 @@ const App = () => (
                 <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/sdrs" element={<ProtectedRoute><SDRsPage /></ProtectedRoute>} />
                 <Route path="/evaluations" element={<ProtectedRoute><EvaluationsPage /></ProtectedRoute>} />
+                <Route path="/closers" element={<ProtectedRoute><ClosersPage /></ProtectedRoute>} />
+                <Route path="/closer-evaluations" element={<ProtectedRoute><CloserEvaluationsPage /></ProtectedRoute>} />
                 <Route path="/export" element={<ProtectedRoute><ExportPage /></ProtectedRoute>} />
                 <Route path="/goals" element={<ProtectedRoute><GoalsPage /></ProtectedRoute>} />
                 <Route path="/development" element={<ProtectedRoute><DevelopmentPage /></ProtectedRoute>} />

@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.sync-meetime]
 verify_jwt = false
+
+[functions.analyze-closer-meeting]
+verify_jwt = false
