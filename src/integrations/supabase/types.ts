@@ -128,6 +128,68 @@ export type Database = {
           },
         ]
       }
+      closer_evaluations: {
+        Row: {
+          ai_feedback: Json | null
+          closer_id: string
+          created_at: string
+          date: string
+          deal_value: number | null
+          final_score: number
+          id: string
+          meeting_duration_minutes: number | null
+          objections: Json
+          plan_sold: string | null
+          result: Database["public"]["Enums"]["closer_evaluation_result"]
+          scores: Json
+          transcription: string | null
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          ai_feedback?: Json | null
+          closer_id: string
+          created_at?: string
+          date?: string
+          deal_value?: number | null
+          final_score?: number
+          id?: string
+          meeting_duration_minutes?: number | null
+          objections?: Json
+          plan_sold?: string | null
+          result: Database["public"]["Enums"]["closer_evaluation_result"]
+          scores?: Json
+          transcription?: string | null
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          ai_feedback?: Json | null
+          closer_id?: string
+          created_at?: string
+          date?: string
+          deal_value?: number | null
+          final_score?: number
+          id?: string
+          meeting_duration_minutes?: number | null
+          objections?: Json
+          plan_sold?: string | null
+          result?: Database["public"]["Enums"]["closer_evaluation_result"]
+          scores?: Json
+          transcription?: string | null
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closer_evaluations_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "sdrs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       development_plans: {
         Row: {
           completed_at: string | null
@@ -845,6 +907,7 @@ export type Database = {
           name: string
           role: string
           squad: Database["public"]["Enums"]["squad_type"]
+          team_type: Database["public"]["Enums"]["team_type"]
           updated_at: string
         }
         Insert: {
@@ -854,6 +917,7 @@ export type Database = {
           name: string
           role: string
           squad: Database["public"]["Enums"]["squad_type"]
+          team_type?: Database["public"]["Enums"]["team_type"]
           updated_at?: string
         }
         Update: {
@@ -863,6 +927,7 @@ export type Database = {
           name?: string
           role?: string
           squad?: Database["public"]["Enums"]["squad_type"]
+          team_type?: Database["public"]["Enums"]["team_type"]
           updated_at?: string
         }
         Relationships: []
@@ -903,9 +968,11 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
+      closer_evaluation_result: "fechou" | "nao_fechou" | "follow_up"
       prospection_result: "prosseguiu" | "recusou" | "perdeu_interesse"
       prospection_type: "Ligação" | "WhatsApp"
       squad_type: "Águia" | "Lobo"
+      team_type: "SDR" | "Closer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1034,9 +1101,11 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      closer_evaluation_result: ["fechou", "nao_fechou", "follow_up"],
       prospection_result: ["prosseguiu", "recusou", "perdeu_interesse"],
       prospection_type: ["Ligação", "WhatsApp"],
       squad_type: ["Águia", "Lobo"],
+      team_type: ["SDR", "Closer"],
     },
   },
 } as const
