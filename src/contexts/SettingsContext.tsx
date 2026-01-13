@@ -29,6 +29,7 @@ interface MenuSettings {
   dashboard: boolean;
   evaluations: boolean;
   sdrs: boolean;
+  closers: boolean;
   export: boolean;
   goals: boolean;
   development: boolean;
@@ -36,6 +37,7 @@ interface MenuSettings {
   bestPractices: boolean;
   gamification: boolean;
   pipedrive: boolean;
+  meetime: boolean;
 }
 
 interface AppSettings {
@@ -57,7 +59,7 @@ const defaultSettings: AppSettings = {
   branding: { companyName: 'SDR Evaluator', logoUrl: null },
   features: { audioUpload: true, aiAnalysis: true, dataExport: true },
   colors: { primary: '#38035e', secondary: '#f59e0b', accent: '#9333ea' },
-  menu: { dashboard: true, evaluations: true, sdrs: true, export: true, goals: true, development: true, compare: true, bestPractices: true, gamification: true, pipedrive: true },
+  menu: { dashboard: true, evaluations: true, sdrs: true, closers: true, export: true, goals: true, development: true, compare: true, bestPractices: true, gamification: true, pipedrive: true, meetime: true },
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);

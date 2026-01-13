@@ -13,13 +13,15 @@ import {
   User,
   Lightbulb,
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Plus
 } from 'lucide-react';
-import { useDevelopmentPlans, useUpdateDevelopmentPlan } from '@/hooks/useDevelopmentPlans';
+import { useDevelopmentPlans, useUpdateDevelopmentPlan, useAddDevelopmentPlan } from '@/hooks/useDevelopmentPlans';
 import { useApp } from '@/contexts/AppContext';
 import { DevelopmentPlan, PDIPriority, PDIStatus } from '@/types/goals';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { CreatePDIDialog } from '@/components/development/CreatePDIDialog';
 
 const priorityConfig: Record<PDIPriority, { label: string; color: string; icon: React.ElementType }> = {
   high: { label: 'Alta', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: AlertTriangle },
@@ -48,6 +50,7 @@ export default function DevelopmentPage() {
   const { data: plans = [], isLoading } = useDevelopmentPlans();
   const { sdrs, evaluations } = useApp();
   const updatePlan = useUpdateDevelopmentPlan();
+  const addPlan = useAddDevelopmentPlan();
 
   const [selectedSdr, setSelectedSdr] = useState<string>('all');
   const [selectedTab, setSelectedTab] = useState<string>('pending');
@@ -98,7 +101,7 @@ export default function DevelopmentPage() {
     if (selectedSdr !== 'all') {
       result = result.filter(p => p.sdrId === selectedSdr);
     }
-    if (selectedTab !== 'all') {
+    if (selectedTab !== 'all' && selectedTab !== 'suggestions') {
       result = result.filter(p => p.status === selectedTab);
     }
     return result;
@@ -113,16 +116,29 @@ export default function DevelopmentPage() {
     });
   };
 
+  const handleCreateFromSuggestion = async (rec: { sdrId: string; weakArea: string; recommendation: string }) => {
+    await addPlan.mutateAsync({
+      sdrId: rec.sdrId,
+      weakArea: rec.weakArea,
+      recommendation: rec.recommendation,
+      priority: 'high' as PDIPriority,
+      status: 'pending' as PDIStatus,
+    });
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <GraduationCap className="h-6 w-6 text-accent" />
-            Plano de Desenvolvimento Individual
-          </h1>
-          <p className="text-muted-foreground">Acompanhe o desenvolvimento e recomendações de melhoria para cada SDR</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <GraduationCap className="h-6 w-6 text-accent" />
+              Plano de Desenvolvimento Individual
+            </h1>
+            <p className="text-muted-foreground">Acompanhe o desenvolvimento e recomendações de melhoria para cada SDR</p>
+          </div>
+          <CreatePDIDialog sdrs={sdrs} />
         </div>
 
         {/* Filters */}
@@ -193,6 +209,16 @@ export default function DevelopmentPage() {
                             <Lightbulb className="h-4 w-4 text-accent shrink-0 mt-0.5" />
                             <p className="text-sm">{rec.recommendation}</p>
                           </div>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="w-full"
+                            onClick={() => handleCreateFromSuggestion(rec)}
+                            disabled={addPlan.isPending}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Criar PDI
+                          </Button>
                         </CardContent>
                       </Card>
                     );
@@ -211,6 +237,9 @@ export default function DevelopmentPage() {
                     <GraduationCap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground">
                       Nenhum plano {statusConfig[status].label.toLowerCase()} encontrado
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Clique em "Criar Plano" para adicionar um novo PDI
                     </p>
                   </CardContent>
                 </Card>
