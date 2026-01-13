@@ -11,12 +11,17 @@ import { ObjectionsList } from '@/components/dashboard/ObjectionsList';
 import { ObjectionsAnalysis } from '@/components/dashboard/ObjectionsAnalysis';
 import { BANTAnalysis } from '@/components/dashboard/BANTAnalysis';
 import { DashboardFilters } from '@/components/dashboard/DashboardFilters';
+import { CloserDashboardTab } from '@/components/dashboard/CloserDashboardTab';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Scores } from '@/types';
 import { subDays } from 'date-fns';
+import { useCloserEvaluations } from '@/hooks/useCloserEvaluations';
+import { useClosers } from '@/hooks/useClosers';
 
 export default function Dashboard() {
   const { sdrs, evaluations } = useApp();
+  const { data: closerEvaluations = [] } = useCloserEvaluations();
+  const { data: closers = [] } = useClosers();
   
   // Filter states
   const [selectedSdr, setSelectedSdr] = useState('all');
@@ -160,13 +165,13 @@ export default function Dashboard() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="overview" className="space-y-6">
+        <Tabs defaultValue="sdrs" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-            <TabsTrigger value="objections">Objeções</TabsTrigger>
+            <TabsTrigger value="sdrs">SDRs</TabsTrigger>
+            <TabsTrigger value="closers">Closers</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-6">
+          <TabsContent value="sdrs" className="space-y-6">
             {/* Top Row - Score Gauge, Conversion, Stats */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Score Gauge */}
@@ -220,9 +225,8 @@ export default function Dashboard() {
                 <BANTAnalysis data={bantData} />
               </div>
             </div>
-          </TabsContent>
 
-          <TabsContent value="objections" className="space-y-6">
+            {/* Objections Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Objections List */}
               <div className="glass-card rounded-xl p-6">
@@ -239,6 +243,15 @@ export default function Dashboard() {
                 />
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="closers" className="space-y-6">
+            <CloserDashboardTab
+              closers={closers}
+              evaluations={closerEvaluations}
+              dateRange={dateRange}
+              selectedCloser={selectedSdr}
+            />
           </TabsContent>
         </Tabs>
       </div>

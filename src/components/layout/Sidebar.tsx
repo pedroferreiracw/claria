@@ -3,9 +3,9 @@ import {
   LayoutDashboard, 
   Users, 
   ClipboardCheck, 
-  FileSpreadsheet,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Sparkles,
   LogOut,
   Settings,
@@ -24,25 +24,33 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useUserRole } from '@/hooks/useUserRole';
 import { toast } from 'sonner';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const baseMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', key: 'dashboard' },
   { icon: Users, label: 'SDRs', path: '/sdrs', key: 'sdrs' },
-  { icon: ClipboardCheck, label: 'Avaliações SDR', path: '/evaluations', key: 'evaluations' },
   { icon: Users, label: 'Closers', path: '/closers', key: 'closers' },
-  { icon: Video, label: 'Avaliações Closer', path: '/closer-evaluations', key: 'closerEvaluations' },
   { icon: Target, label: 'Metas', path: '/goals', key: 'goals' },
   { icon: TrendingUp, label: 'PDI', path: '/development', key: 'development' },
   { icon: GitCompare, label: 'Comparar', path: '/compare', key: 'compare' },
   { icon: BookOpen, label: 'Boas Práticas', path: '/best-practices', key: 'bestPractices' },
   { icon: Trophy, label: 'Gamificação', path: '/gamification', key: 'gamification' },
-  { icon: Plug, label: 'Pipedrive', path: '/pipedrive', key: 'pipedrive' },
-  { icon: Plug, label: 'Meetime', path: '/meetime', key: 'meetime' },
-  { icon: FileSpreadsheet, label: 'Exportar', path: '/export', key: 'export' },
+];
+
+const evaluationsSubmenu = [
+  { label: 'SDRs', path: '/evaluations' },
+  { label: 'Closers', path: '/closer-evaluations' },
+];
+
+const integrationsSubmenu = [
+  { label: 'Pipedrive', path: '/pipedrive' },
+  { label: 'Meetime', path: '/meetime' },
 ];
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const [evaluationsOpen, setEvaluationsOpen] = useState(false);
+  const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const location = useLocation();
   const { user, signOut } = useAuth();
   const { settings } = useSettings();
@@ -52,6 +60,14 @@ export function Sidebar() {
     await signOut();
     toast.success('Logout realizado com sucesso!');
   };
+
+  // Check if current path is in a submenu
+  const isInEvaluations = evaluationsSubmenu.some(item => location.pathname === item.path);
+  const isInIntegrations = integrationsSubmenu.some(item => location.pathname === item.path);
+
+  // Auto-expand if active route is inside
+  const evaluationsExpanded = evaluationsOpen || isInEvaluations;
+  const integrationsExpanded = integrationsOpen || isInIntegrations;
 
   // Filter menu items based on settings (show by default if not explicitly disabled)
   const menuItems = baseMenuItems.filter(item => {
@@ -107,7 +123,7 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 space-y-1 p-3 overflow-y-auto">
           {menuItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
@@ -126,6 +142,96 @@ export function Sidebar() {
               </NavLink>
             );
           })}
+
+          {/* Evaluations Submenu */}
+          {settings.menu.evaluations !== false && (
+            <Collapsible open={!collapsed && evaluationsExpanded} onOpenChange={setEvaluationsOpen}>
+              <CollapsibleTrigger asChild>
+                <button
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 w-full",
+                    isInEvaluations
+                      ? "gradient-accent text-accent-foreground shadow-lg shadow-accent/20" 
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  )}
+                >
+                  <ClipboardCheck className="h-5 w-5 shrink-0" />
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 text-left">Avaliações</span>
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", evaluationsExpanded && "rotate-180")} />
+                    </>
+                  )}
+                </button>
+              </CollapsibleTrigger>
+              {!collapsed && (
+                <CollapsibleContent className="pl-8 space-y-1 mt-1">
+                  {evaluationsSubmenu.map((subItem) => {
+                    const isSubActive = location.pathname === subItem.path;
+                    return (
+                      <NavLink
+                        key={subItem.path}
+                        to={subItem.path}
+                        className={cn(
+                          "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                          isSubActive
+                            ? "bg-primary/20 text-primary font-medium"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        )}
+                      >
+                        <span>{subItem.label}</span>
+                      </NavLink>
+                    );
+                  })}
+                </CollapsibleContent>
+              )}
+            </Collapsible>
+          )}
+
+          {/* Integrations Submenu */}
+          {(settings.menu.pipedrive !== false || settings.menu.meetime !== false) && (
+            <Collapsible open={!collapsed && integrationsExpanded} onOpenChange={setIntegrationsOpen}>
+              <CollapsibleTrigger asChild>
+                <button
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 w-full",
+                    isInIntegrations
+                      ? "gradient-accent text-accent-foreground shadow-lg shadow-accent/20" 
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  )}
+                >
+                  <Plug className="h-5 w-5 shrink-0" />
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 text-left">Integrações</span>
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", integrationsExpanded && "rotate-180")} />
+                    </>
+                  )}
+                </button>
+              </CollapsibleTrigger>
+              {!collapsed && (
+                <CollapsibleContent className="pl-8 space-y-1 mt-1">
+                  {integrationsSubmenu.map((subItem) => {
+                    const isSubActive = location.pathname === subItem.path;
+                    return (
+                      <NavLink
+                        key={subItem.path}
+                        to={subItem.path}
+                        className={cn(
+                          "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200",
+                          isSubActive
+                            ? "bg-primary/20 text-primary font-medium"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                        )}
+                      >
+                        <span>{subItem.label}</span>
+                      </NavLink>
+                    );
+                  })}
+                </CollapsibleContent>
+              )}
+            </Collapsible>
+          )}
 
           {/* Admin Settings Link */}
           {isAdmin && (
