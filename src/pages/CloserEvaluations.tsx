@@ -277,7 +277,7 @@ export default function CloserEvaluations() {
                 Nova Avaliação
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh]">
+            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
               <DialogHeader>
                 <DialogTitle>
                   {step === 'input' ? 'Nova Avaliação de Closer' : 'Revisar Análise'}
@@ -285,67 +285,77 @@ export default function CloserEvaluations() {
               </DialogHeader>
 
               {step === 'input' ? (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Closer *</Label>
-                    <Select value={selectedCloserId} onValueChange={setSelectedCloserId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o closer" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {closers.map((closer) => (
-                          <SelectItem key={closer.id} value={closer.id}>
-                            {closer.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="flex flex-col flex-1 overflow-hidden">
+                  <ScrollArea className="flex-1 pr-4">
+                    <div className="space-y-4 pb-4">
+                      <div className="space-y-2">
+                        <Label>Closer *</Label>
+                        <Select value={selectedCloserId} onValueChange={setSelectedCloserId}>
+                          <SelectTrigger className={cn(!selectedCloserId && "border-muted-foreground/30")}>
+                            <SelectValue placeholder="Selecione o closer" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {closers.map((closer) => (
+                              <SelectItem key={closer.id} value={closer.id}>
+                                {closer.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                  <div className="space-y-2">
-                    <Label>URL do Vídeo (opcional)</Label>
-                    <Input
-                      type="url"
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      placeholder="https://..."
-                    />
-                  </div>
+                      <div className="space-y-2">
+                        <Label>URL do Vídeo (opcional)</Label>
+                        <Input
+                          type="url"
+                          value={videoUrl}
+                          onChange={(e) => setVideoUrl(e.target.value)}
+                          placeholder="https://..."
+                        />
+                      </div>
 
-                  <div className="space-y-2">
-                    <Label>Upload de Áudio (opcional)</Label>
-                    <Input
-                      type="file"
-                      accept="audio/*"
-                      onChange={handleAudioChange}
-                    />
-                    {audioFile && (
-                      <p className="text-sm text-muted-foreground">
-                        Arquivo: {audioFile.name}
-                      </p>
-                    )}
-                  </div>
+                      <div className="space-y-2">
+                        <Label>Upload de Áudio (opcional)</Label>
+                        <Input
+                          type="file"
+                          accept="audio/*"
+                          onChange={handleAudioChange}
+                        />
+                        {audioFile && (
+                          <p className="text-sm text-muted-foreground">
+                            Arquivo: {audioFile.name}
+                          </p>
+                        )}
+                      </div>
 
-                  <div className="space-y-2">
-                    <Label>Transcrição da Reunião *</Label>
-                    <Textarea
-                      value={transcription}
-                      onChange={(e) => setTranscription(e.target.value)}
-                      placeholder="Cole aqui a transcrição da reunião ou faça upload do áudio acima..."
-                      rows={10}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Mínimo de 100 caracteres para análise
-                    </p>
-                  </div>
+                      <div className="space-y-2">
+                        <Label>Transcrição da Reunião *</Label>
+                        <Textarea
+                          value={transcription}
+                          onChange={(e) => setTranscription(e.target.value)}
+                          placeholder="Cole aqui a transcrição da reunião ou faça upload do áudio acima..."
+                          rows={8}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Mínimo de 100 caracteres para análise
+                        </p>
+                      </div>
 
-                  <div className="flex justify-end gap-2 pt-4">
+                      {analysisError && (
+                        <p className="text-sm text-destructive">{analysisError}</p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                  
+                  {/* Fixed Footer */}
+                  <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
                     <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                       Cancelar
                     </Button>
                     <Button
                       onClick={handleAnalyze}
                       disabled={!selectedCloserId || (transcription.length < 100 && !audioFile) || isAnalyzing || isTranscribing}
+                      className="min-w-[180px]"
                     >
                       {isAnalyzing || isTranscribing ? (
                         <>
@@ -360,10 +370,6 @@ export default function CloserEvaluations() {
                       )}
                     </Button>
                   </div>
-
-                  {analysisError && (
-                    <p className="text-sm text-destructive">{analysisError}</p>
-                  )}
                 </div>
               ) : analysisResult ? (
                 <ScrollArea className="max-h-[70vh]">

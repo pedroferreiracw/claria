@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -6,31 +6,52 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ScoreBadge } from '@/components/ui/score-badge';
-import { Plus, Users, Pencil, Trash2, Bird, Dog } from 'lucide-react';
-import { Squad, SDR } from '@/types';
+import { Card, CardContent } from '@/components/ui/card';
+import { Plus, Users, Bird, Dog, LayoutGrid, Table } from 'lucide-react';
+import { Squad, SDR, Scores } from '@/types';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { SDRPerformanceCard } from '@/components/sdr/SDRPerformanceCard';
+import { SDRDetailDrawer } from '@/components/sdr/SDRDetailDrawer';
 
 export default function SDRsPage() {
   const { sdrs, evaluations, addSDR, updateSDR, deleteSDR } = useApp();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSDR, setEditingSDR] = useState<SDR | null>(null);
+  const [selectedSDR, setSelectedSDR] = useState<SDR | null>(null);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [formData, setFormData] = useState({
     name: '',
     squad: '' as Squad | '',
     role: '',
   });
 
-  const getSDRScore = (sdrId: string) => {
-    const sdrEvals = evaluations.filter(e => e.sdrId === sdrId);
-    if (sdrEvals.length === 0) return 0;
-    return Math.round(sdrEvals.reduce((sum, e) => sum + e.finalScore, 0) / sdrEvals.length);
-  };
+  // Calculate team average scores
+  const teamAverageScores = useMemo(() => {
+    if (evaluations.length === 0) return undefined;
+    
+    const scoreKeys: (keyof Scores)[] = ['abertura', 'rapport', 'spin', 'bant', 'dores', 'geracaoValor', 'conducaoAgendamento', 'contornoObjecoes'];
+    const avgScores: Partial<Scores> = {};
+    
+    scoreKeys.forEach(key => {
+      avgScores[key] = Math.round(
+        evaluations.reduce((sum, e) => sum + (e.scores[key] || 0), 0) / evaluations.length
+      );
+    });
+    
+    return avgScores as Scores;
+  }, [evaluations]);
 
-  const getEvaluationCount = (sdrId: string) => {
-    return evaluations.filter(e => e.sdrId === sdrId).length;
-  };
+  // Rank SDRs by average score
+  const rankedSDRs = useMemo(() => {
+    return sdrs.map(sdr => {
+      const sdrEvals = evaluations.filter(e => e.sdrId === sdr.id);
+      const avgScore = sdrEvals.length > 0
+        ? Math.round(sdrEvals.reduce((sum, e) => sum + e.finalScore, 0) / sdrEvals.length)
+        : 0;
+      return { sdr, avgScore, evaluations: sdrEvals };
+    }).sort((a, b) => b.avgScore - a.avgScore);
+  }, [sdrs, evaluations]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,17 +75,8 @@ export default function SDRsPage() {
 
   const handleEdit = (sdr: SDR) => {
     setEditingSDR(sdr);
-    setFormData({
-      name: sdr.name,
-      squad: sdr.squad,
-      role: sdr.role,
-    });
+    setFormData({ name: sdr.name, squad: sdr.squad, role: sdr.role });
     setIsDialogOpen(true);
-  };
-
-  const handleDelete = (id: string) => {
-    deleteSDR(id);
-    toast.success('SDR removido com sucesso!');
   };
 
   const squadCounts = {
@@ -72,9 +84,21 @@ export default function SDRsPage() {
     Lobo: sdrs.filter(s => s.squad === 'Lobo').length,
   };
 
+  const stats = useMemo(() => {
+    const total = sdrs.length;
+    const avgScore = rankedSDRs.length > 0
+      ? Math.round(rankedSDRs.reduce((sum, r) => sum + r.avgScore, 0) / rankedSDRs.length)
+      : 0;
+    const totalEvals = evaluations.length;
+    const successRate = totalEvals > 0
+      ? Math.round((evaluations.filter(e => e.result === 'prosseguiu').length / totalEvals) * 100)
+      : 0;
+    return { total, avgScore, totalEvals, successRate };
+  }, [sdrs, rankedSDRs, evaluations]);
+
   return (
     <MainLayout>
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -87,167 +111,97 @@ export default function SDRsPage() {
             </div>
           </div>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="accent" onClick={() => {
-                setEditingSDR(null);
-                setFormData({ name: '', squad: '', role: '' });
-              }}>
-                <Plus className="h-4 w-4 mr-2" />
-                Novo SDR
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 border rounded-lg p-1">
+              <Button variant={viewMode === 'cards' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => setViewMode('cards')}>
+                <LayoutGrid className="h-4 w-4" />
               </Button>
-            </DialogTrigger>
-            <DialogContent className="glass-card border-border/50">
-              <DialogHeader>
-                <DialogTitle>{editingSDR ? 'Editar SDR' : 'Cadastrar Novo SDR'}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Nome completo"
-                    className="bg-secondary border-border"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="squad">Squad</Label>
-                  <Select
-                    value={formData.squad}
-                    onValueChange={(value) => setFormData({ ...formData, squad: value as Squad })}
-                  >
-                    <SelectTrigger className="bg-secondary border-border">
-                      <SelectValue placeholder="Selecione o squad" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Águia">
-                        <span className="flex items-center gap-2">
-                          <Bird className="h-4 w-4" /> Águia
-                        </span>
-                      </SelectItem>
-                      <SelectItem value="Lobo">
-                        <span className="flex items-center gap-2">
-                          <Dog className="h-4 w-4" /> Lobo
-                        </span>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">Cargo</Label>
-                  <Select
-                    value={formData.role}
-                    onValueChange={(value) => setFormData({ ...formData, role: value })}
-                  >
-                    <SelectTrigger className="bg-secondary border-border">
-                      <SelectValue placeholder="Selecione o cargo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="SDR Júnior">SDR Júnior</SelectItem>
-                      <SelectItem value="SDR Pleno">SDR Pleno</SelectItem>
-                      <SelectItem value="SDR Sênior">SDR Sênior</SelectItem>
-                      <SelectItem value="Líder de Squad">Líder de Squad</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex gap-3 pt-4">
-                  <Button type="button" variant="outline" className="flex-1" onClick={() => setIsDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit" variant="accent" className="flex-1">
-                    {editingSDR ? 'Salvar' : 'Cadastrar'}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+              <Button variant={viewMode === 'table' ? 'secondary' : 'ghost'} size="icon" className="h-8 w-8" onClick={() => setViewMode('table')}>
+                <Table className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="accent" onClick={() => { setEditingSDR(null); setFormData({ name: '', squad: '', role: '' }); }}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Novo SDR
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="glass-card border-border/50">
+                <DialogHeader>
+                  <DialogTitle>{editingSDR ? 'Editar SDR' : 'Cadastrar Novo SDR'}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nome</Label>
+                    <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Nome completo" className="bg-secondary border-border" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="squad">Squad</Label>
+                    <Select value={formData.squad} onValueChange={(value) => setFormData({ ...formData, squad: value as Squad })}>
+                      <SelectTrigger className="bg-secondary border-border">
+                        <SelectValue placeholder="Selecione o squad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Águia"><span className="flex items-center gap-2"><Bird className="h-4 w-4" /> Águia</span></SelectItem>
+                        <SelectItem value="Lobo"><span className="flex items-center gap-2"><Dog className="h-4 w-4" /> Lobo</span></SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Cargo</Label>
+                    <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                      <SelectTrigger className="bg-secondary border-border">
+                        <SelectValue placeholder="Selecione o cargo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="SDR Júnior">SDR Júnior</SelectItem>
+                        <SelectItem value="SDR Pleno">SDR Pleno</SelectItem>
+                        <SelectItem value="SDR Sênior">SDR Sênior</SelectItem>
+                        <SelectItem value="Líder de Squad">Líder de Squad</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-3 pt-4">
+                    <Button type="button" variant="outline" className="flex-1" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+                    <Button type="submit" variant="accent" className="flex-1">{editingSDR ? 'Salvar' : 'Cadastrar'}</Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
-        {/* Squad Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="glass-card rounded-xl p-4 flex items-center gap-4">
-            <div className="h-12 w-12 rounded-lg bg-amber-500/20 flex items-center justify-center">
-              <Bird className="h-6 w-6 text-amber-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{squadCounts['Águia']}</p>
-              <p className="text-sm text-muted-foreground">Squad Águia</p>
-            </div>
-          </div>
-          <div className="glass-card rounded-xl p-4 flex items-center gap-4">
-            <div className="h-12 w-12 rounded-lg bg-blue-500/20 flex items-center justify-center">
-              <Dog className="h-6 w-6 text-blue-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{squadCounts['Lobo']}</p>
-              <p className="text-sm text-muted-foreground">Squad Lobo</p>
-            </div>
-          </div>
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-primary/20 flex items-center justify-center"><Users className="h-6 w-6 text-primary" /></div><div><p className="text-2xl font-bold">{stats.total}</p><p className="text-sm text-muted-foreground">Total SDRs</p></div></CardContent></Card>
+          <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-amber-500/20 flex items-center justify-center"><Bird className="h-6 w-6 text-amber-400" /></div><div><p className="text-2xl font-bold">{squadCounts['Águia']}</p><p className="text-sm text-muted-foreground">Squad Águia</p></div></CardContent></Card>
+          <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-blue-500/20 flex items-center justify-center"><Dog className="h-6 w-6 text-blue-400" /></div><div><p className="text-2xl font-bold">{squadCounts['Lobo']}</p><p className="text-sm text-muted-foreground">Squad Lobo</p></div></CardContent></Card>
+          <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center"><span className="text-green-500 font-bold">{stats.successRate}%</span></div><div><p className="text-2xl font-bold">{stats.avgScore}</p><p className="text-sm text-muted-foreground">Nota Média</p></div></CardContent></Card>
         </div>
 
         {/* SDR Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sdrs.map((sdr) => {
-            const score = getSDRScore(sdr.id);
-            const evalCount = getEvaluationCount(sdr.id);
-            
-            return (
-              <div 
-                key={sdr.id}
-                className="glass-card rounded-xl p-6 hover:scale-[1.02] transition-all duration-300"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-accent/40 to-primary/40 flex items-center justify-center">
-                      <span className="text-lg font-bold">{sdr.name.charAt(0)}</span>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">{sdr.name}</h3>
-                      <p className="text-sm text-muted-foreground">{sdr.role}</p>
-                    </div>
-                  </div>
-                  <ScoreBadge score={score} size="sm" />
-                </div>
-
-                <div className="flex items-center gap-2 mb-4">
-                  <span className={cn(
-                    "px-2 py-1 rounded-full text-xs font-medium",
-                    sdr.squad === 'Águia' 
-                      ? "bg-amber-500/20 text-amber-400"
-                      : "bg-blue-500/20 text-blue-400"
-                  )}>
-                    {sdr.squad === 'Águia' ? <Bird className="inline h-3 w-3 mr-1" /> : <Dog className="inline h-3 w-3 mr-1" />}
-                    {sdr.squad}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {evalCount} avaliações
-                  </span>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1"
-                    onClick={() => handleEdit(sdr)}
-                  >
-                    <Pencil className="h-3 w-3 mr-1" /> Editar
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => handleDelete(sdr.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
+        <div className={cn(viewMode === 'cards' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-3")}>
+          {rankedSDRs.map(({ sdr, evaluations: sdrEvals }, index) => (
+            <SDRPerformanceCard
+              key={sdr.id}
+              sdr={sdr}
+              evaluations={sdrEvals}
+              rank={index + 1}
+              onClick={() => setSelectedSDR(sdr)}
+            />
+          ))}
         </div>
+
+        {/* Detail Drawer */}
+        <SDRDetailDrawer
+          sdr={selectedSDR}
+          evaluations={selectedSDR ? evaluations.filter(e => e.sdrId === selectedSDR.id) : []}
+          teamAverageScores={teamAverageScores}
+          open={!!selectedSDR}
+          onClose={() => setSelectedSDR(null)}
+        />
       </div>
     </MainLayout>
   );
