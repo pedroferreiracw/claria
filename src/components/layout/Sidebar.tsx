@@ -15,7 +15,8 @@ import {
   BookOpen,
   Trophy,
   Plug,
-  Video
+  Video,
+  Brain
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -28,6 +29,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 
 const baseMenuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', key: 'dashboard' },
+  { icon: Brain, label: 'Inteligência Comercial', path: '/intelligence', key: 'intelligence' },
   { icon: Target, label: 'Metas', path: '/goals', key: 'goals' },
   { icon: TrendingUp, label: 'PDI', path: '/development', key: 'development' },
   { icon: GitCompare, label: 'Comparar', path: '/compare', key: 'compare' },

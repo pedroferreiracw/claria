@@ -99,13 +99,21 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // Log first talk structure to understand the schema
+      if (page === 1 && talks.length > 0) {
+        console.log('Talk structure sample:', JSON.stringify(Object.keys(talks[0])));
+        console.log('Talk sample data:', JSON.stringify(talks[0]).substring(0, 500));
+      }
       console.log(`Page ${page}: ${talks.length} talks`);
 
       for (const talk of talks) {
-        const kommoId = String(talk.id);
-        if (!talk.id) {
-          console.error('Talk without id, skipping');
+        // Kommo talks API may use different ID fields
+        const rawId = talk.id || talk.talk_id || talk._id;
+        if (!rawId) {
+          if (page === 1) console.error('Talk without id, keys:', JSON.stringify(Object.keys(talk)));
           continue;
+        }
+        const kommoId = String(rawId);
         }
 
         const contactName = talk.contact?.name || talk._embedded?.contact?.name || 'Desconhecido';
