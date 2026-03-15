@@ -119,29 +119,51 @@ export function useSaveKommoConfig() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (config: { subdomain: string; access_token: string; refresh_token: string }) => {
-      // Check if config exists
+    mutationFn: async (config: { 
+      subdomain: string; 
+      integration_id: string; 
+      secret_key: string; 
+      auth_code: string;
+    }) => {
+      // Exchange auth code for tokens via Edge Function
+      const { data: tokenData, error: fnError } = await supabase.functions.invoke('kommo-auth', {
+        body: config,
+      });
+
+      if (fnError) throw new Error(fnError.message);
+      if (tokenData?.error) throw new Error(tokenData.error);
+
+      // Save config with obtained tokens
       const { data: existing } = await supabase.from('kommo_config').select('id').limit(1).maybeSingle();
       
+      const configData = {
+        subdomain: config.subdomain,
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        token_expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
+        is_connected: true,
+        updated_at: new Date().toISOString(),
+      };
+
       if (existing) {
         const { error } = await supabase
           .from('kommo_config')
-          .update({ ...config, is_connected: true, updated_at: new Date().toISOString() })
+          .update(configData)
           .eq('id', existing.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('kommo_config')
-          .insert({ ...config, is_connected: true });
+          .insert(configData);
         if (error) throw error;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kommo-config'] });
-      toast.success('Configuração da Kommo salva com sucesso!');
+      toast.success('Kommo conectada com sucesso!');
     },
     onError: (error: Error) => {
-      toast.error(`Erro ao salvar configuração: ${error.message}`);
+      toast.error(`Erro ao conectar: ${error.message}`);
     },
   });
 }

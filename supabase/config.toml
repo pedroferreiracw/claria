@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.sync-kommo]
 verify_jwt = false
+
+[functions.kommo-auth]
+verify_jwt = false
