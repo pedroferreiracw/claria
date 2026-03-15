@@ -431,9 +431,7 @@ function KommoSettingsSection() {
   const { data: config, isLoading } = useKommoConfig();
   const saveConfig = useSaveKommoConfig();
   const [subdomain, setSubdomain] = useState('');
-  const [integrationId, setIntegrationId] = useState('');
-  const [secretKey, setSecretKey] = useState('');
-  const [authCode, setAuthCode] = useState('');
+  const [longLivedToken, setLongLivedToken] = useState('');
 
   if (isLoading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />;
 
@@ -469,12 +467,12 @@ function KommoSettingsSection() {
       ) : (
         <div className="space-y-5">
           <div className="p-4 rounded-lg bg-secondary/50 border border-border">
-            <p className="text-sm font-medium mb-2">Como obter as credenciais:</p>
+            <p className="text-sm font-medium mb-2">Como conectar:</p>
             <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
               <li>Na Kommo, vá em <strong>Configurações → Integrações</strong></li>
-              <li>Crie ou abra sua <strong>integração privada</strong></li>
-              <li>Na aba <strong>"Chaves e escopos"</strong>, copie o <strong>ID de integração</strong> e gere a <strong>Chave secreta</strong></li>
-              <li>Copie o <strong>Código de autorização</strong> (válido por 20 minutos)</li>
+              <li>Abra sua <strong>integração privada</strong></li>
+              <li>Na aba <strong>"Chaves e escopos"</strong>, clique em <strong>"Gerar token de longa duração"</strong></li>
+              <li>Copie o token gerado e cole abaixo</li>
             </ol>
           </div>
           <div className="space-y-3">
@@ -489,46 +487,22 @@ function KommoSettingsSection() {
               <p className="text-xs text-muted-foreground">Apenas o nome antes de .kommo.com</p>
             </div>
             <div className="space-y-2">
-              <Label>ID de integração</Label>
-              <Input
-                value={integrationId}
-                onChange={(e) => setIntegrationId(e.target.value)}
-                placeholder="Ex: 51a6e0db-c5e5-41ae-b6de-cf18c0685adb"
-                className="bg-secondary"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Chave secreta</Label>
+              <Label>Token de longa duração</Label>
               <Input
                 type="password"
-                value={secretKey}
-                onChange={(e) => setSecretKey(e.target.value)}
-                placeholder="Clique em 'Gerar nova chave secreta' na Kommo"
-                className="bg-secondary"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Código de autorização</Label>
-              <Input
-                type="password"
-                value={authCode}
-                onChange={(e) => setAuthCode(e.target.value)}
-                placeholder="Código disponível por 20 minutos na Kommo"
+                value={longLivedToken}
+                onChange={(e) => setLongLivedToken(e.target.value)}
+                placeholder="Cole o token gerado na Kommo"
                 className="bg-secondary"
               />
               <p className="text-xs text-muted-foreground">
-                ⚠️ O código expira em 20 minutos. Copie e conecte rapidamente.
+                Este token não expira e permite acesso à API da Kommo sem fluxo OAuth.
               </p>
             </div>
           </div>
           <Button
-            onClick={() => saveConfig.mutate({ 
-              subdomain, 
-              integration_id: integrationId, 
-              secret_key: secretKey, 
-              auth_code: authCode 
-            })}
-            disabled={!subdomain || !integrationId || !secretKey || !authCode || saveConfig.isPending}
+            onClick={() => saveConfig.mutate({ subdomain, long_lived_token: longLivedToken })}
+            disabled={!subdomain || !longLivedToken || saveConfig.isPending}
             className="w-full"
           >
             {saveConfig.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
