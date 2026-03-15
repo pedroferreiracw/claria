@@ -374,10 +374,12 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          integration_id: string | null
           is_connected: boolean | null
           last_sync_at: string | null
           refresh_token: string | null
           scope_id: string | null
+          secret_key: string | null
           subdomain: string | null
           token_expires_at: string | null
           updated_at: string
@@ -387,10 +389,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          integration_id?: string | null
           is_connected?: boolean | null
           last_sync_at?: string | null
           refresh_token?: string | null
           scope_id?: string | null
+          secret_key?: string | null
           subdomain?: string | null
           token_expires_at?: string | null
           updated_at?: string
@@ -400,10 +404,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          integration_id?: string | null
           is_connected?: boolean | null
           last_sync_at?: string | null
           refresh_token?: string | null
           scope_id?: string | null
+          secret_key?: string | null
           subdomain?: string | null
           token_expires_at?: string | null
           updated_at?: string
