@@ -16,56 +16,9 @@ interface KommoConfig {
   secret_key: string | null;
 }
 
-async function refreshTokenIfNeeded(config: KommoConfig, supabase: any): Promise<string> {
-  const now = new Date();
-  const expiresAt = config.token_expires_at ? new Date(config.token_expires_at) : null;
-  
-  // If token is still valid (with 5 min buffer), return it
-  if (expiresAt && expiresAt.getTime() - now.getTime() > 5 * 60 * 1000) {
-    return config.access_token;
-  }
-
-  console.log('Refreshing Kommo access token...');
-  
-  const clientId = config.integration_id;
-  const clientSecret = config.secret_key;
-  
-  if (!clientId || !clientSecret) {
-    throw new Error('Integration ID and Secret Key not found in kommo_config');
-  }
-
-  const response = await fetch(`https://${config.subdomain}.kommo.com/oauth2/access_token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'refresh_token',
-      refresh_token: config.refresh_token,
-      redirect_uri: `https://${config.subdomain}.kommo.com`,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Token refresh failed: ${errorText}`);
-  }
-
-  const tokens = await response.json();
-  
-  const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-  
-  await supabase
-    .from('kommo_config')
-    .update({
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      token_expires_at: newExpiresAt,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', config.id);
-
-  return tokens.access_token;
+// Long-lived tokens from private integrations don't expire
+function getAccessToken(config: KommoConfig): string {
+  return config.access_token;
 }
 
 async function fetchKommoAPI(subdomain: string, token: string, endpoint: string, params: Record<string, string> = {}) {
