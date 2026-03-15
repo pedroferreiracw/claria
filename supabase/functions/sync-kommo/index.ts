@@ -5,25 +5,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface KommoConfig {
-  id: string;
-  subdomain: string;
-  access_token: string;
-}
-
 async function fetchKommoAPI(subdomain: string, token: string, endpoint: string, params: Record<string, string> = {}) {
   const url = new URL(`https://${subdomain}.kommo.com${endpoint}`);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  
   const response = await fetch(url.toString(), {
     headers: { 'Authorization': `Bearer ${token}` },
   });
-
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Kommo API error (${response.status}): ${errorText}`);
   }
-
   return response.json();
 }
 
@@ -45,32 +36,28 @@ Deno.serve(async (req) => {
 
     if (configError || !configs?.length) {
       return new Response(
-        JSON.stringify({ error: 'Kommo not configured or not connected' }),
+        JSON.stringify({ error: 'Kommo not configured' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const config = configs[0] as KommoConfig;
-
-    // Date filter: start of current month
+    const config = configs[0];
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfMonthUnix = Math.floor(startOfMonth.getTime() / 1000);
 
-    // Fetch Kommo users once for SDR mapping
+    // Fetch Kommo users for SDR mapping
     const kommoUserMap = new Map<number, string>();
     try {
       const usersData = await fetchKommoAPI(config.subdomain, config.access_token, '/api/v4/users');
-      const users = usersData?._embedded?.users || [];
-      for (const u of users) {
+      for (const u of (usersData?._embedded?.users || [])) {
         kommoUserMap.set(u.id, u.name);
       }
-      console.log(`Mapped ${kommoUserMap.size} Kommo users`);
-    } catch (e) {
-      console.error('Could not fetch Kommo users:', e);
+      console.log('Mapped ' + kommoUserMap.size + ' Kommo users');
+    } catch (_e) {
+      console.error('Could not fetch Kommo users');
     }
 
-    // Get local SDRs for matching by name
     const { data: sdrs } = await supabase.from('sdrs').select('id, name').eq('team_type', 'SDR');
     const sdrMap = new Map((sdrs || []).map((s: any) => [s.name.toLowerCase(), s.id]));
 
@@ -79,17 +66,17 @@ Deno.serve(async (req) => {
     let hasMore = true;
 
     while (hasMore) {
-      console.log(`Fetching talks page ${page}...`);
-      
-      let talksData;
+      console.log('Fetching talks page ' + page);
+
+      let talksData: any;
       try {
         talksData = await fetchKommoAPI(config.subdomain, config.access_token, '/api/v4/talks', {
           page: String(page),
           limit: '250',
           'filter[created_at][from]': String(startOfMonthUnix),
         });
-      } catch (e) {
-        console.error(`Error fetching page ${page}:`, e);
+      } catch (_e) {
+        console.error('Error fetching page ' + page);
         break;
       }
 
@@ -99,28 +86,26 @@ Deno.serve(async (req) => {
         break;
       }
 
-      // Log first talk structure to understand the schema
+      // Debug: log first talk structure
       if (page === 1 && talks.length > 0) {
-        console.log('Talk structure sample:', JSON.stringify(Object.keys(talks[0])));
-        console.log('Talk sample data:', JSON.stringify(talks[0]).substring(0, 500));
+        console.log('Talk keys: ' + JSON.stringify(Object.keys(talks[0])));
+        console.log('Talk sample: ' + JSON.stringify(talks[0]).substring(0, 800));
       }
-      console.log(`Page ${page}: ${talks.length} talks`);
+      console.log('Page ' + page + ': ' + talks.length + ' talks');
 
       for (const talk of talks) {
-        // Kommo talks API may use different ID fields
         const rawId = talk.id || talk.talk_id || talk._id;
         if (!rawId) {
-          if (page === 1) console.error('Talk without id, keys:', JSON.stringify(Object.keys(talk)));
+          if (page === 1 && totalSynced === 0) {
+            console.error('Talk without id, keys: ' + JSON.stringify(Object.keys(talk)));
+          }
           continue;
         }
         const kommoId = String(rawId);
-        }
-
         const contactName = talk.contact?.name || talk._embedded?.contact?.name || 'Desconhecido';
         const contactPhone = talk.contact?.phone || null;
-        
-        // Match SDR by responsible user
-        let sdrId = null;
+
+        let sdrId: string | null = null;
         const responsibleUserId = talk.created_by || talk.responsible_user_id;
         let responsibleName: string | null = null;
         if (responsibleUserId && kommoUserMap.has(responsibleUserId)) {
@@ -128,12 +113,10 @@ Deno.serve(async (req) => {
         } else if (talk.created_by_name) {
           responsibleName = talk.created_by_name;
         }
-        
         if (responsibleName) {
           sdrId = sdrMap.get(responsibleName.toLowerCase()) || null;
         }
 
-        // Upsert conversation
         const { data: convData } = await supabase
           .from('kommo_conversations')
           .upsert({
@@ -151,42 +134,35 @@ Deno.serve(async (req) => {
 
         if (!convData) continue;
 
-        // Fetch messages via events API (incoming_chat_message + outgoing_chat_message)
+        // Fetch messages via events API
         try {
-          // Get the contact/entity linked to this talk
           const entityId = talk.entity_id;
-          const entityType = talk.entity_type; // 'contacts' or 'leads'
-          
+          const entityType = talk.entity_type;
+
           if (entityId && entityType) {
-            // Fetch chat events for this entity
-            const eventsData = await fetchKommoAPI(
-              config.subdomain, config.access_token,
-              '/api/v4/events',
-              { 
+            const entityFilter = entityType === 'contacts' ? 'contact' : 'lead';
+
+            const [inData, outData] = await Promise.all([
+              fetchKommoAPI(config.subdomain, config.access_token, '/api/v4/events', {
                 'filter[type][]': 'incoming_chat_message',
-                'filter[entity][]': entityType === 'contacts' ? 'contact' : 'lead',
+                'filter[entity][]': entityFilter,
                 'filter[entity_id][]': String(entityId),
                 'filter[created_at][from]': String(startOfMonthUnix),
                 limit: '100',
-              }
-            );
-
-            // Also fetch outgoing
-            const outEventsData = await fetchKommoAPI(
-              config.subdomain, config.access_token,
-              '/api/v4/events',
-              {
+              }),
+              fetchKommoAPI(config.subdomain, config.access_token, '/api/v4/events', {
                 'filter[type][]': 'outgoing_chat_message',
-                'filter[entity][]': entityType === 'contacts' ? 'contact' : 'lead', 
+                'filter[entity][]': entityFilter,
                 'filter[entity_id][]': String(entityId),
                 'filter[created_at][from]': String(startOfMonthUnix),
                 limit: '100',
-              }
-            );
+              }),
+            ]);
 
-            const inEvents = eventsData?._embedded?.events || [];
-            const outEvents = outEventsData?._embedded?.events || [];
-            const allEvents = [...inEvents, ...outEvents].sort((a, b) => a.created_at - b.created_at);
+            const allEvents = [
+              ...(inData?._embedded?.events || []),
+              ...(outData?._embedded?.events || []),
+            ].sort((a: any, b: any) => a.created_at - b.created_at);
 
             let prevSentAt: Date | null = null;
             let totalResponseTime = 0;
@@ -195,20 +171,19 @@ Deno.serve(async (req) => {
             for (const evt of allEvents) {
               const sentAt = new Date(evt.created_at * 1000);
               const senderType = evt.type === 'incoming_chat_message' ? 'lead' : 'sdr';
-              const kommoMessageId = `${kommoId}_evt_${evt.id}`;
-              
-              // Extract message text from event value_after
+              const kommoMessageId = kommoId + '_evt_' + evt.id;
+
               let content = '[mensagem]';
               if (evt.value_after) {
                 const va = evt.value_after;
                 if (Array.isArray(va) && va.length > 0) {
                   content = va[0]?.message?.text || va[0]?.text || '[mensagem]';
                 } else if (typeof va === 'object') {
-                  content = va.message?.text || va.text || '[mensagem]';
+                  content = (va as any).message?.text || (va as any).text || '[mensagem]';
                 }
               }
 
-              let responseTimeSec = null;
+              let responseTimeSec: number | null = null;
               if (senderType === 'sdr' && prevSentAt) {
                 responseTimeSec = Math.round((sentAt.getTime() - prevSentAt.getTime()) / 1000);
                 if (responseTimeSec > 0 && responseTimeSec < 86400) {
@@ -225,7 +200,7 @@ Deno.serve(async (req) => {
                   conversation_id: convData.id,
                   sender_type: senderType,
                   sender_name: senderType === 'lead' ? contactName : responsibleName,
-                  content,
+                  content: content,
                   sent_at: sentAt.toISOString(),
                   response_time_seconds: responseTimeSec,
                 }, { onConflict: 'kommo_message_id' });
@@ -234,14 +209,11 @@ Deno.serve(async (req) => {
             const avgResponseTime = responseCount > 0 ? Math.round(totalResponseTime / responseCount) : null;
             await supabase
               .from('kommo_conversations')
-              .update({
-                messages_count: allEvents.length,
-                avg_response_time_seconds: avgResponseTime,
-              })
+              .update({ messages_count: allEvents.length, avg_response_time_seconds: avgResponseTime })
               .eq('id', convData.id);
           }
-        } catch (msgError) {
-          console.error(`Error fetching events for talk ${kommoId}:`, msgError);
+        } catch (_msgErr) {
+          console.error('Error fetching events for talk ' + kommoId);
         }
 
         totalSynced++;
@@ -254,20 +226,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update last sync time
     await supabase
       .from('kommo_config')
       .update({ last_sync_at: new Date().toISOString() })
       .eq('id', config.id);
 
-    console.log(`Sync complete: ${totalSynced} conversations across ${page} pages`);
+    console.log('Sync complete: ' + totalSynced + ' conversations, ' + page + ' pages');
 
     return new Response(
       JSON.stringify({ success: true, synced: totalSynced, pages: page }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Sync Kommo error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
