@@ -487,11 +487,13 @@ export type Database = {
           created_at: string
           finished_at: string | null
           id: string
+          kommo_contact_id: string | null
           kommo_id: string
           lead_email: string | null
           lead_name: string | null
           lead_phone: string | null
           messages_count: number | null
+          responsible_user_id: number | null
           sdr_id: string | null
           started_at: string | null
           status: string | null
@@ -503,11 +505,13 @@ export type Database = {
           created_at?: string
           finished_at?: string | null
           id?: string
+          kommo_contact_id?: string | null
           kommo_id: string
           lead_email?: string | null
           lead_name?: string | null
           lead_phone?: string | null
           messages_count?: number | null
+          responsible_user_id?: number | null
           sdr_id?: string | null
           started_at?: string | null
           status?: string | null
@@ -519,11 +523,13 @@ export type Database = {
           created_at?: string
           finished_at?: string | null
           id?: string
+          kommo_contact_id?: string | null
           kommo_id?: string
           lead_email?: string | null
           lead_name?: string | null
           lead_phone?: string | null
           messages_count?: number | null
+          responsible_user_id?: number | null
           sdr_id?: string | null
           started_at?: string | null
           status?: string | null

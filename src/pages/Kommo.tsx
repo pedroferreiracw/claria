@@ -101,15 +101,15 @@ export default function KommoPage() {
           <div className="glass-card rounded-xl p-6">
             <h3 className="font-semibold mb-2">Sincronização Automática</h3>
             <p className="text-sm text-muted-foreground">
-              As conversas são sincronizadas automaticamente a cada 30 minutos via pg_cron. 
-              As análises de IA são executadas automaticamente 15 minutos após cada sincronização.
+              As conversas são sincronizadas automaticamente a cada 15 minutos via pg_cron. 
+              As análises de IA são executadas automaticamente 7 minutos após cada sincronização.
             </p>
             <div className="flex items-center gap-2 mt-3">
               <Badge variant="outline" className="text-xs">
-                <RefreshCw className="h-3 w-3 mr-1" /> Sync: a cada 30min
+                <RefreshCw className="h-3 w-3 mr-1" /> Sync: a cada 15min
               </Badge>
               <Badge variant="outline" className="text-xs">
-                IA: a cada 30min (offset 15min)
+                IA: a cada 15min (offset 7min)
               </Badge>
             </div>
           </div>
