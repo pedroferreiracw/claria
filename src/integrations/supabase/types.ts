@@ -368,6 +368,155 @@ export type Database = {
           },
         ]
       }
+      kommo_config: {
+        Row: {
+          access_token: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_connected: boolean | null
+          last_sync_at: string | null
+          refresh_token: string | null
+          scope_id: string | null
+          subdomain: string | null
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_connected?: boolean | null
+          last_sync_at?: string | null
+          refresh_token?: string | null
+          scope_id?: string | null
+          subdomain?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_connected?: boolean | null
+          last_sync_at?: string | null
+          refresh_token?: string | null
+          scope_id?: string | null
+          subdomain?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      kommo_conversations: {
+        Row: {
+          ai_analysis_id: string | null
+          avg_response_time_seconds: number | null
+          created_at: string
+          finished_at: string | null
+          id: string
+          kommo_id: string
+          lead_email: string | null
+          lead_name: string | null
+          lead_phone: string | null
+          messages_count: number | null
+          sdr_id: string | null
+          started_at: string | null
+          status: string | null
+          synced_at: string
+        }
+        Insert: {
+          ai_analysis_id?: string | null
+          avg_response_time_seconds?: number | null
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          kommo_id: string
+          lead_email?: string | null
+          lead_name?: string | null
+          lead_phone?: string | null
+          messages_count?: number | null
+          sdr_id?: string | null
+          started_at?: string | null
+          status?: string | null
+          synced_at?: string
+        }
+        Update: {
+          ai_analysis_id?: string | null
+          avg_response_time_seconds?: number | null
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          kommo_id?: string
+          lead_email?: string | null
+          lead_name?: string | null
+          lead_phone?: string | null
+          messages_count?: number | null
+          sdr_id?: string | null
+          started_at?: string | null
+          status?: string | null
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kommo_conversations_ai_analysis_id_fkey"
+            columns: ["ai_analysis_id"]
+            isOneToOne: false
+            referencedRelation: "evaluations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kommo_conversations_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdrs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kommo_messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          response_time_seconds: number | null
+          sender_name: string | null
+          sender_type: string
+          sent_at: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          response_time_seconds?: number | null
+          sender_name?: string | null
+          sender_type: string
+          sent_at: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          response_time_seconds?: number | null
+          sender_name?: string | null
+          sender_type?: string
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kommo_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "kommo_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meetime_activities: {
         Row: {
           annotation: string | null
