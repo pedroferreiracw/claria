@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const MAX_TALK_PAGES = 10;
-const MAX_EVENT_PAGES = 5;
+const MAX_LEAD_PAGES = 3;
+const MAX_MSG_TALKS = 10;
 const USERS_CACHE_HOURS = 24;
 
 async function fetchKommo(subdomain: string, token: string, endpoint: string, params: Record<string, string> = {}) {
@@ -17,7 +17,9 @@ async function fetchKommo(subdomain: string, token: string, endpoint: string, pa
     const body = (await res.text()).substring(0, 300);
     throw new Error(`Kommo ${res.status}: ${body}`);
   }
-  return res.json();
+  const text = await res.text();
+  if (!text || text.trim() === '') return { _embedded: {} };
+  return JSON.parse(text);
 }
 
 function fetchKommoWithArrayFilters(
@@ -32,7 +34,9 @@ function fetchKommoWithArrayFilters(
   return fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } })
     .then(async res => {
       if (!res.ok) throw new Error(`Kommo ${res.status}: ${(await res.text()).substring(0, 300)}`);
-      return res.json();
+      const text = await res.text();
+      if (!text || text.trim() === '') return { _embedded: {} };
+      return JSON.parse(text);
     });
 }
 
@@ -49,7 +53,6 @@ Deno.serve(async (req) => {
   try {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-    // Get Kommo config
     const { data: configs } = await supabase
       .from('kommo_config')
       .select('id, subdomain, access_token, scope_id')
@@ -58,7 +61,7 @@ Deno.serve(async (req) => {
     const config = configs[0];
 
     // ══════════════════════════════════════════════════════════
-    // PHASE A: Discover pre-sales users by group_id (cached)
+    // PHASE A: Discover pre-sales users (cached)
     // ══════════════════════════════════════════════════════════
     const { data: usersCacheSetting } = await supabase
       .from('app_settings').select('setting_value')
@@ -84,13 +87,8 @@ Deno.serve(async (req) => {
       console.log('Refreshing Kommo users cache...');
       const usersData = await fetchKommo(config.subdomain, config.access_token, '/api/v4/users', { limit: '250' });
       const kommoUsers = usersData?._embedded?.users || [];
-      console.log(`Fetched ${kommoUsers.length} Kommo users`);
-
-      // Get local SDRs
       const { data: localSdrs } = await supabase.from('sdrs').select('id, name').eq('team_type', 'SDR');
       const sdrList = localSdrs || [];
-
-      // Step 1: Find which group_id has the most SDR name matches → that's pre-sales
       const groupMatchCount = new Map<number, number>();
       const groupUsers = new Map<number, any[]>();
 
@@ -99,102 +97,55 @@ Deno.serve(async (req) => {
         if (!gid) continue;
         if (!groupUsers.has(gid)) groupUsers.set(gid, []);
         groupUsers.get(gid)!.push(ku);
-
-        const kuNameLower = (ku.name || '').toLowerCase();
+        const kuFirst = (ku.name || '').toLowerCase().split(' ')[0];
         for (const sdr of sdrList) {
-          const sdrNameLower = sdr.name.toLowerCase();
-          const kuFirst = kuNameLower.split(' ')[0];
-          const sdrFirst = sdrNameLower.split(' ')[0];
-          if (kuNameLower === sdrNameLower || (kuFirst.length >= 3 && kuFirst === sdrFirst)) {
+          const sdrFirst = sdr.name.toLowerCase().split(' ')[0];
+          if ((ku.name || '').toLowerCase() === sdr.name.toLowerCase() || (kuFirst.length >= 3 && kuFirst === sdrFirst)) {
             groupMatchCount.set(gid, (groupMatchCount.get(gid) || 0) + 1);
             break;
           }
         }
       }
 
-      // Pick the group with most matches
-      let bestGroupId = 0;
-      let bestCount = 0;
-      for (const [gid, count] of groupMatchCount) {
-        if (count > bestCount) { bestGroupId = gid; bestCount = count; }
-      }
+      let bestGroupId = 0, bestCount = 0;
+      for (const [gid, count] of groupMatchCount) { if (count > bestCount) { bestGroupId = gid; bestCount = count; } }
 
-      console.log(`Pre-sales group detected: ${bestGroupId} (${bestCount} SDR matches)`);
-      console.log(`All groups: ${Array.from(groupMatchCount.entries()).map(([g, c]) => `${g}=${c}`).join(', ')}`);
-
-      // Step 2: Use ALL users in that group (not just matched ones)
       const presalesGroup = groupUsers.get(bestGroupId) || [];
-      console.log(`Pre-sales group has ${presalesGroup.length} users: ${presalesGroup.map((u: any) => u.name).join(', ')}`);
+      console.log(`Pre-sales group ${bestGroupId}: ${presalesGroup.length} users`);
 
-      // Step 3: Match each pre-sales user to an SDR (or auto-create)
       for (const ku of presalesGroup) {
         const kuNameLower = (ku.name || '').toLowerCase();
         const kuFirst = kuNameLower.split(' ')[0];
         let matchedSdrId: string | null = null;
-
         for (const sdr of sdrList) {
           const sdrNameLower = sdr.name.toLowerCase();
           const sdrFirst = sdrNameLower.split(' ')[0];
           if (kuNameLower === sdrNameLower || (kuFirst.length >= 3 && kuFirst === sdrFirst) ||
               kuNameLower.includes(sdrNameLower) || sdrNameLower.includes(kuNameLower)) {
-            matchedSdrId = sdr.id;
-            break;
+            matchedSdrId = sdr.id; break;
           }
         }
-
-        // Auto-create SDR if not found
         if (!matchedSdrId) {
-          console.log(`Auto-creating SDR for: ${ku.name}`);
-          const { data: newSdr } = await supabase.from('sdrs').insert({
-            name: ku.name,
-            role: 'SDR',
-            squad: 'Águia', // Default squad
-            team_type: 'SDR',
-          }).select('id').single();
-          if (newSdr) {
-            matchedSdrId = newSdr.id;
-            sdrList.push({ id: newSdr.id, name: ku.name });
-          }
+          const { data: newSdr } = await supabase.from('sdrs').insert({ name: ku.name, role: 'SDR', squad: 'Águia', team_type: 'SDR' }).select('id').single();
+          if (newSdr) { matchedSdrId = newSdr.id; sdrList.push({ id: newSdr.id, name: ku.name }); }
         }
-
         presalesUserIds.push(ku.id);
         if (matchedSdrId) kommoUserToSdr[String(ku.id)] = matchedSdrId;
         kommoUserToName[String(ku.id)] = ku.name;
-        console.log(`  ${ku.name} (Kommo ${ku.id}) → SDR ${matchedSdrId || 'NONE'}`);
       }
 
-      // Cache
       await supabase.from('app_settings').upsert({
         setting_key: 'kommo_presales_users',
-        setting_value: {
-          userIds: presalesUserIds,
-          userToSdr: kommoUserToSdr,
-          nameMap: kommoUserToName,
-          groupId: bestGroupId,
-          refreshedAt: new Date().toISOString(),
-        },
+        setting_value: { userIds: presalesUserIds, userToSdr: kommoUserToSdr, nameMap: kommoUserToName, groupId: bestGroupId, refreshedAt: new Date().toISOString() },
         updated_at: new Date().toISOString(),
       }, { onConflict: 'setting_key' });
-
-      console.log(`Cached ${presalesUserIds.length} pre-sales user IDs`);
     }
 
-    if (presalesUserIds.length === 0) {
-      return resp({ error: 'No pre-sales users found' }, 400);
-    }
+    if (presalesUserIds.length === 0) return resp({ error: 'No pre-sales users found' }, 400);
 
-    // ══════════════════════════════════════════════════════════
-    // Read sync state
-    // ══════════════════════════════════════════════════════════
-    const { data: syncStateSetting } = await supabase
-      .from('app_settings').select('setting_value')
-      .eq('setting_key', 'kommo_sync_state').maybeSingle();
-
+    const { data: syncStateSetting } = await supabase.from('app_settings').select('setting_value').eq('setting_key', 'kommo_sync_state').maybeSingle();
     let state = (syncStateSetting?.setting_value as any) || {};
-    let phase = state.phase || 'talks';
-    let talkPage = state.talkPage || 1;
-    let eventPage = state.eventPage || 1;
-
+    let leadPage = state.leadPage || 1;
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const fromUnix = Math.floor(startOfMonth.getTime() / 1000);
 
@@ -202,253 +153,170 @@ Deno.serve(async (req) => {
     let totalMessages = 0;
 
     // ══════════════════════════════════════════════════════════
-    // PHASE B: Sync talks (filtered by pre-sales users)
+    // STEP 1: Sync leads + find associated talks
     // ══════════════════════════════════════════════════════════
-    if (phase === 'talks') {
-      let hasMore = true;
-      let pages = 0;
+    let hasMore = true;
+    let pages = 0;
 
-      while (hasMore && pages < MAX_TALK_PAGES) {
+    while (hasMore && pages < MAX_LEAD_PAGES) {
+      try {
         const data = await fetchKommoWithArrayFilters(
-          config.subdomain, config.access_token, '/api/v4/talks',
-          { page: String(talkPage), limit: '250', 'filter[created_at][from]': String(fromUnix) },
+          config.subdomain, config.access_token, '/api/v4/leads',
+          { page: String(leadPage), limit: '250', with: 'contacts', 'filter[created_at][from]': String(fromUnix) },
           { 'filter[responsible_user_id]': presalesUserIds }
         );
+        const leads = data?._embedded?.leads || [];
+        if (!leads.length) { hasMore = false; break; }
+        console.log(`Leads page ${leadPage}: ${leads.length} leads`);
 
-        const talks = data?._embedded?.talks || [];
-        if (!talks.length) { hasMore = false; break; }
-
-        console.log(`Talks page ${talkPage}: ${talks.length} talks`);
-
-        const upserts = talks.filter((t: any) => t.id || t.talk_id).map((t: any) => {
-          const talkId = String(t.id || t.talk_id);
-          const uid = t.responsible_user_id;
+        const upserts = [];
+        for (const lead of leads) {
+          const uid = lead.responsible_user_id;
           const sdrId = kommoUserToSdr[String(uid)] || null;
-          const contactId = t.contact_id || t.entity_id || null;
-
-          return {
-            kommo_id: talkId,
+          if (!sdrId) continue;
+          const contacts = lead._embedded?.contacts || [];
+          const contactId = contacts[0]?.id || null;
+          upserts.push({
+            kommo_id: String(lead.id),
             sdr_id: sdrId,
             responsible_user_id: uid,
             kommo_contact_id: contactId ? String(contactId) : null,
-            lead_name: t.contact?.name || `Conversa #${talkId}`,
-            status: t.is_closed ? 'closed' : 'active',
-            started_at: t.created_at ? new Date(t.created_at * 1000).toISOString() : null,
-            finished_at: t.is_closed && t.closed_at ? new Date(t.closed_at * 1000).toISOString() : null,
+            lead_name: contacts[0]?.name || lead.name || `Lead #${lead.id}`,
+            status: lead.status_id === 142 || lead.status_id === 143 ? 'closed' : 'active',
+            started_at: lead.created_at ? new Date(lead.created_at * 1000).toISOString() : null,
+            finished_at: lead.closed_at ? new Date(lead.closed_at * 1000).toISOString() : null,
             synced_at: new Date().toISOString(),
-          };
-        });
-
+          });
+        }
         if (upserts.length > 0) {
           await supabase.from('kommo_conversations').upsert(upserts, { onConflict: 'kommo_id' });
           totalSynced += upserts.length;
         }
-
-        hasMore = talks.length >= 250;
-        talkPage++;
+        hasMore = leads.length >= 250;
+        leadPage++;
         pages++;
-      }
-
-      if (!hasMore) {
-        phase = 'events';
-        talkPage = 1;
-        eventPage = 1;
-        console.log('Talks phase complete → events');
+      } catch (e: any) {
+        console.error('Leads error:', e.message);
+        hasMore = false;
       }
     }
+    if (!hasMore) leadPage = 1;
+    console.log(`Leads synced: ${totalSynced}`);
 
     // ══════════════════════════════════════════════════════════
-    // PHASE C: Sync messages via Events API
+    // STEP 2: For each lead, find its talk_id via events, then
+    // fetch talk detail to get the chat_id for amojo
     // ══════════════════════════════════════════════════════════
-    if (phase === 'events') {
-      // Build contact_id → conversation mapping
-      const { data: convs } = await supabase
-        .from('kommo_conversations')
-        .select('id, kommo_contact_id, sdr_id')
-        .not('kommo_contact_id', 'is', null)
-        .limit(5000);
+    const { data: convsNeedMsgs } = await supabase
+      .from('kommo_conversations')
+      .select('id, kommo_id, sdr_id, responsible_user_id')
+      .not('sdr_id', 'is', null)
+      .or('messages_count.eq.0,messages_count.is.null')
+      .order('started_at', { ascending: true })
+      .limit(MAX_MSG_TALKS);
 
-      const contactMap = new Map<string, { id: string; sdr_id: string | null }>();
-      for (const c of (convs || [])) {
-        if (c.kommo_contact_id) contactMap.set(c.kommo_contact_id, { id: c.id, sdr_id: c.sdr_id });
-      }
-      console.log(`Contact→Conv map: ${contactMap.size} entries`);
+    console.log(`Conversations needing messages: ${(convsNeedMsgs || []).length}`);
 
-      let hasMore = true;
-      let pages = 0;
+    for (const conv of (convsNeedMsgs || [])) {
+      try {
+        // Step 2a: Get the talk detail for this lead
+        // First, try to find the talk via the talks list filtered by this entity
+        const talksData = await fetchKommo(
+          config.subdomain, config.access_token, '/api/v4/talks',
+          { 'filter[entity_id]': conv.kommo_id, 'filter[entity_type]': 'leads', limit: '1' }
+        );
 
-      while (hasMore && pages < MAX_EVENT_PAGES) {
-        try {
-          const data = await fetchKommo(
-            config.subdomain, config.access_token, '/api/v4/events',
-            {
-              page: String(eventPage),
-              limit: '100',
-              'filter[type]': 'incoming_chat_message,outgoing_chat_message',
-              'filter[created_at][from]': String(fromUnix),
-            }
-          );
-
-          const events = data?._embedded?.events || [];
-          if (!events.length) { hasMore = false; break; }
-
-          // Log first event structure for debugging
-          if (pages === 0 && events.length > 0) {
-            console.log('Sample event structure:', JSON.stringify(events[0]).substring(0, 500));
+        const talks = talksData?._embedded?.talks || [];
+        
+        if (talks.length > 0) {
+          const talk = talks[0];
+          
+          // Log the full talk structure for the first one
+          if (totalMessages === 0) {
+            console.log('Talk structure:', JSON.stringify(talk).substring(0, 1000));
           }
 
-          console.log(`Events page ${eventPage}: ${events.length} events`);
-
-          const msgs: any[] = [];
-          for (const evt of events) {
-            const contactId = String(evt.entity_id || '');
-            const conv = contactMap.get(contactId);
-            if (!conv) continue;
-
-            // Extract message text - try multiple known structures
-            let text = '';
-            const va = evt.value_after;
-            if (Array.isArray(va)) {
-              for (const item of va) {
-                if (item?.message?.text) { text = item.message.text; break; }
-                if (item?.text) { text = item.text; break; }
-                if (typeof item === 'string') { text = item; break; }
-              }
-            } else if (va?.message?.text) {
-              text = va.message.text;
-            } else if (va?.text) {
-              text = va.text;
-            } else if (typeof va === 'string') {
-              text = va;
-            }
-
-            if (!text || text.length < 1) continue;
-
-            const isOut = evt.type === 'outgoing_chat_message';
-            msgs.push({
-              kommo_message_id: String(evt.id),
-              conversation_id: conv.id,
-              sender_type: isOut ? 'sdr' : 'lead',
-              sender_name: isOut ? (kommoUserToName[String(evt.created_by)] || 'SDR') : 'Lead',
-              content: text.substring(0, 5000),
-              sent_at: evt.created_at ? new Date(evt.created_at * 1000).toISOString() : new Date().toISOString(),
-            });
-          }
-
-          if (msgs.length > 0) {
-            const { error } = await supabase
-              .from('kommo_messages')
-              .upsert(msgs, { onConflict: 'kommo_message_id' });
-            if (error) console.error('Message upsert error:', error);
-            totalMessages += msgs.length;
-            console.log(`  → ${msgs.length} messages saved`);
-          }
-
-          hasMore = events.length >= 100;
-          eventPage++;
-          pages++;
-        } catch (e: any) {
-          console.error('Events error:', e.message);
-          hasMore = false;
-        }
-      }
-
-      if (!hasMore) {
-        phase = 'enrich';
-        eventPage = 1;
-        console.log('Events phase complete → enrich');
-      }
-    }
-
-    // ══════════════════════════════════════════════════════════
-    // PHASE D: Enrich (contact names, message counts, response times)
-    // ══════════════════════════════════════════════════════════
-    if (phase === 'enrich') {
-      // Get conversations that need enrichment
-      const { data: convsToEnrich } = await supabase
-        .from('kommo_conversations')
-        .select('id, kommo_contact_id, lead_name')
-        .or('lead_name.like.Conversa #%,messages_count.eq.0')
-        .limit(200);
-
-      let enriched = 0;
-      for (const conv of (convsToEnrich || [])) {
-        const updates: any = {};
-
-        // Count messages
-        const { count } = await supabase
-          .from('kommo_messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conv.id);
-        updates.messages_count = count || 0;
-
-        // Calculate avg response time
-        if ((count || 0) > 1) {
-          const { data: msgs } = await supabase
-            .from('kommo_messages')
-            .select('sender_type, sent_at')
-            .eq('conversation_id', conv.id)
-            .order('sent_at', { ascending: true })
-            .limit(100);
-
-          if (msgs && msgs.length > 1) {
-            let totalTime = 0, responseN = 0;
-            for (let i = 1; i < msgs.length; i++) {
-              if (msgs[i].sender_type === 'sdr' && msgs[i - 1].sender_type === 'lead') {
-                const diff = (new Date(msgs[i].sent_at).getTime() - new Date(msgs[i - 1].sent_at).getTime()) / 1000;
-                if (diff > 0 && diff < 86400) { totalTime += diff; responseN++; }
-              }
-            }
-            if (responseN > 0) updates.avg_response_time_seconds = Math.round(totalTime / responseN);
-          }
-        }
-
-        // Enrich contact name
-        if (conv.lead_name?.startsWith('Conversa #') && conv.kommo_contact_id && enriched < 30) {
+          // The talk may have a chat_id in _embedded or directly
+          const chatId = talk.chat_id || talk._embedded?.chat?.id || talk.id;
+          
+          // Step 2b: Try fetching messages from the talk's messages endpoint
+          // Kommo has /api/v4/talks/{id} which may include message data
           try {
-            const contact = await fetchKommo(config.subdomain, config.access_token, `/api/v4/contacts/${conv.kommo_contact_id}`);
-            if (contact?.name) {
-              updates.lead_name = contact.name;
-              const pf = contact.custom_fields_values?.find((f: any) => f.field_code === 'PHONE');
-              if (pf?.values?.[0]?.value) updates.lead_phone = pf.values[0].value;
-              const ef = contact.custom_fields_values?.find((f: any) => f.field_code === 'EMAIL');
-              if (ef?.values?.[0]?.value) updates.lead_email = ef.values[0].value;
-              enriched++;
+            const talkDetail = await fetchKommo(
+              config.subdomain, config.access_token, `/api/v4/talks/${talk.id}`,
+              { with: 'messages' }
+            );
+            
+            if (totalMessages === 0) {
+              console.log('Talk detail:', JSON.stringify(talkDetail).substring(0, 1000));
             }
-          } catch (_) { /* skip */ }
+          } catch (e: any) {
+            console.log(`Talk detail error: ${e.message.substring(0, 200)}`);
+          }
+
+          // Step 2c: Try the amojo chat history API
+          if (config.scope_id) {
+            try {
+              // Try with talk.id as chat_id
+              const chatHistory = await fetchAmojo(config.scope_id, config.access_token, String(chatId));
+              console.log('Amojo response:', JSON.stringify(chatHistory).substring(0, 1000));
+              
+              // Parse messages from amojo response
+              const amojoMsgs = chatHistory?.messages || chatHistory?._embedded?.messages || [];
+              if (amojoMsgs.length > 0) {
+                console.log('Got amojo messages:', amojoMsgs.length);
+              }
+            } catch (e: any) {
+              console.log(`Amojo error (chatId=${chatId}): ${e.message.substring(0, 200)}`);
+              
+              // Try with contact_id
+              if (conv.kommo_contact_id) {
+                try {
+                  const chatHistory2 = await fetchAmojo(config.scope_id, config.access_token, conv.kommo_contact_id);
+                  console.log('Amojo (contact) response:', JSON.stringify(chatHistory2).substring(0, 500));
+                } catch (e2: any) {
+                  console.log(`Amojo contact error: ${e2.message.substring(0, 200)}`);
+                }
+              }
+            }
+          }
+        } else {
+          console.log(`No talk found for lead ${conv.kommo_id}`);
         }
 
-        await supabase.from('kommo_conversations').update(updates).eq('id', conv.id);
+        // Mark as processed even if no messages to avoid re-processing
+        // Set messages_count to -1 to indicate "checked, no messages"
+        await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
+      } catch (e: any) {
+        console.error(`Error processing lead ${conv.kommo_id}: ${e.message}`);
+        await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
       }
-
-      console.log(`Enrichment: ${enriched} contacts named, ${(convsToEnrich || []).length} msg counts updated`);
-
-      // Reset to talks for next cycle
-      phase = 'talks';
-      talkPage = 1;
-      eventPage = 1;
     }
 
     // Save state
     await supabase.from('app_settings').upsert({
       setting_key: 'kommo_sync_state',
-      setting_value: { phase, talkPage, eventPage },
+      setting_value: { leadPage },
       updated_at: new Date().toISOString(),
     }, { onConflict: 'setting_key' });
-
     await supabase.from('kommo_config').update({ last_sync_at: new Date().toISOString() }).eq('id', config.id);
 
-    console.log(`Done: phase=${phase}, talks=${totalSynced}, msgs=${totalMessages}, users=${presalesUserIds.length}`);
-
-    return resp({
-      success: true,
-      phase,
-      talks_synced: totalSynced,
-      messages_synced: totalMessages,
-      presales_users: presalesUserIds.length,
-    });
+    console.log(`Done: leads=${totalSynced}, msgs=${totalMessages}, users=${presalesUserIds.length}`);
+    return resp({ success: true, leads_synced: totalSynced, messages_synced: totalMessages, presales_users: presalesUserIds.length });
   } catch (error: any) {
     console.error('Sync error:', error);
     return resp({ error: error.message }, 500);
   }
 });
+
+async function fetchAmojo(scopeId: string, token: string, chatId: string) {
+  const url = `https://amojo.kommo.com/v2/origin/custom/${scopeId}/chats/${chatId}/history`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const body = (await res.text()).substring(0, 300);
+    throw new Error(`Amojo ${res.status}: ${body}`);
+  }
+  const text = await res.text();
+  if (!text || text.trim() === '') return {};
+  return JSON.parse(text);
+}
