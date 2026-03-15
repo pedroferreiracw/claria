@@ -431,8 +431,9 @@ function KommoSettingsSection() {
   const { data: config, isLoading } = useKommoConfig();
   const saveConfig = useSaveKommoConfig();
   const [subdomain, setSubdomain] = useState('');
-  const [accessToken, setAccessToken] = useState('');
-  const [refreshToken, setRefreshToken] = useState('');
+  const [integrationId, setIntegrationId] = useState('');
+  const [secretKey, setSecretKey] = useState('');
+  const [authCode, setAuthCode] = useState('');
 
   if (isLoading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />;
 
@@ -466,44 +467,68 @@ function KommoSettingsSection() {
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Para conectar, crie uma integração privada na Kommo (Configurações → Integrações) e obtenha o access token e refresh token via OAuth 2.0.
-          </p>
+        <div className="space-y-5">
+          <div className="p-4 rounded-lg bg-secondary/50 border border-border">
+            <p className="text-sm font-medium mb-2">Como obter as credenciais:</p>
+            <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+              <li>Na Kommo, vá em <strong>Configurações → Integrações</strong></li>
+              <li>Crie ou abra sua <strong>integração privada</strong></li>
+              <li>Na aba <strong>"Chaves e escopos"</strong>, copie o <strong>ID de integração</strong> e gere a <strong>Chave secreta</strong></li>
+              <li>Copie o <strong>Código de autorização</strong> (válido por 20 minutos)</li>
+            </ol>
+          </div>
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label>Subdomínio</Label>
+              <Label>Subdomínio da conta</Label>
               <Input
                 value={subdomain}
                 onChange={(e) => setSubdomain(e.target.value)}
                 placeholder="suaempresa (de suaempresa.kommo.com)"
                 className="bg-secondary"
               />
+              <p className="text-xs text-muted-foreground">Apenas o nome antes de .kommo.com</p>
             </div>
             <div className="space-y-2">
-              <Label>Access Token</Label>
+              <Label>ID de integração</Label>
               <Input
-                type="password"
-                value={accessToken}
-                onChange={(e) => setAccessToken(e.target.value)}
-                placeholder="Cole o access_token aqui"
+                value={integrationId}
+                onChange={(e) => setIntegrationId(e.target.value)}
+                placeholder="Ex: 51a6e0db-c5e5-41ae-b6de-cf18c0685adb"
                 className="bg-secondary"
               />
             </div>
             <div className="space-y-2">
-              <Label>Refresh Token</Label>
+              <Label>Chave secreta</Label>
               <Input
                 type="password"
-                value={refreshToken}
-                onChange={(e) => setRefreshToken(e.target.value)}
-                placeholder="Cole o refresh_token aqui"
+                value={secretKey}
+                onChange={(e) => setSecretKey(e.target.value)}
+                placeholder="Clique em 'Gerar nova chave secreta' na Kommo"
                 className="bg-secondary"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Código de autorização</Label>
+              <Input
+                type="password"
+                value={authCode}
+                onChange={(e) => setAuthCode(e.target.value)}
+                placeholder="Código disponível por 20 minutos na Kommo"
+                className="bg-secondary"
+              />
+              <p className="text-xs text-muted-foreground">
+                ⚠️ O código expira em 20 minutos. Copie e conecte rapidamente.
+              </p>
             </div>
           </div>
           <Button
-            onClick={() => saveConfig.mutate({ subdomain, access_token: accessToken, refresh_token: refreshToken })}
-            disabled={!subdomain || !accessToken || !refreshToken || saveConfig.isPending}
+            onClick={() => saveConfig.mutate({ 
+              subdomain, 
+              integration_id: integrationId, 
+              secret_key: secretKey, 
+              auth_code: authCode 
+            })}
+            disabled={!subdomain || !integrationId || !secretKey || !authCode || saveConfig.isPending}
             className="w-full"
           >
             {saveConfig.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
