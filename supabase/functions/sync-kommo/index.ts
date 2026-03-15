@@ -5,6 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const MAX_PAGES_PER_RUN = 20; // ~5000 talks per invocation to avoid compute limits
+
 async function fetchKommo(subdomain: string, token: string, endpoint: string, params: Record<string, string> = {}) {
   const url = new URL(`https://${subdomain}.kommo.com${endpoint}`);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
@@ -26,18 +28,33 @@ Deno.serve(async (req) => {
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const fromUnix = Math.floor(startOfMonth.getTime() / 1000);
 
-    // Sync all talks - metadata only, fast
-    let total = 0;
-    let page = 1;
-    let hasMore = true;
+    // Check if we have a stored page cursor from a previous partial run
+    const { data: settingData } = await supabase
+      .from('app_settings')
+      .select('setting_value')
+      .eq('setting_key', 'kommo_sync_page')
+      .maybeSingle();
 
-    while (hasMore) {
+    let startPage = 1;
+    if (settingData?.setting_value && typeof settingData.setting_value === 'number') {
+      startPage = settingData.setting_value as number;
+    }
+
+    let total = 0;
+    let page = startPage;
+    let hasMore = true;
+    let pagesProcessed = 0;
+
+    while (hasMore && pagesProcessed < MAX_PAGES_PER_RUN) {
       const data = await fetchKommo(config.subdomain, config.access_token, '/api/v4/talks', {
         page: String(page), limit: '250',
         'filter[created_at][from]': String(fromUnix),
       });
       const talks = data?._embedded?.talks || [];
-      if (!talks.length) break;
+      if (!talks.length) {
+        hasMore = false;
+        break;
+      }
 
       console.log('Page ' + page + ': ' + talks.length + ' talks');
 
@@ -57,37 +74,49 @@ Deno.serve(async (req) => {
 
       hasMore = talks.length >= 250;
       page++;
+      pagesProcessed++;
     }
 
-    // Now enrich: fetch contact names for up to 20 conversations without real names
-    const { data: unnamed } = await supabase
-      .from('kommo_conversations')
-      .select('id, kommo_id')
-      .like('lead_name', 'Conversa #%')
-      .limit(20);
+    // Save cursor: if there's more data, save next page; otherwise reset to 1
+    const nextPage = hasMore ? page : 1;
+    await supabase.from('app_settings').upsert(
+      { setting_key: 'kommo_sync_page', setting_value: nextPage, updated_at: new Date().toISOString() },
+      { onConflict: 'setting_key' }
+    );
 
+    // Enrich contacts only when we've finished a full pass (cursor reset to 1)
     let enriched = 0;
-    for (const conv of (unnamed || [])) {
-      try {
-        const talkData = await fetchKommo(config.subdomain, config.access_token, '/api/v4/talks/' + conv.kommo_id);
-        if (talkData?.contact_id) {
-          const contact = await fetchKommo(config.subdomain, config.access_token, '/api/v4/contacts/' + talkData.contact_id);
-          if (contact?.name) {
-            let phone: string | null = null;
-            const pf = contact?.custom_fields_values?.find((f: any) => f.field_code === 'PHONE');
-            if (pf?.values?.[0]?.value) phone = pf.values[0].value;
-            await supabase.from('kommo_conversations').update({ lead_name: contact.name, lead_phone: phone }).eq('id', conv.id);
-            enriched++;
+    if (!hasMore) {
+      const { data: unnamed } = await supabase
+        .from('kommo_conversations')
+        .select('id, kommo_id')
+        .like('lead_name', 'Conversa #%')
+        .limit(20);
+
+      for (const conv of (unnamed || [])) {
+        try {
+          const talkData = await fetchKommo(config.subdomain, config.access_token, '/api/v4/talks/' + conv.kommo_id);
+          if (talkData?.contact_id) {
+            const contact = await fetchKommo(config.subdomain, config.access_token, '/api/v4/contacts/' + talkData.contact_id);
+            if (contact?.name) {
+              let phone: string | null = null;
+              const pf = contact?.custom_fields_values?.find((f: any) => f.field_code === 'PHONE');
+              if (pf?.values?.[0]?.value) phone = pf.values[0].value;
+              await supabase.from('kommo_conversations').update({ lead_name: contact.name, lead_phone: phone }).eq('id', conv.id);
+              enriched++;
+            }
           }
-        }
-      } catch (_e) { /* skip */ }
+        } catch (_e) { /* skip */ }
+      }
     }
 
     await supabase.from('kommo_config').update({ last_sync_at: new Date().toISOString() }).eq('id', config.id);
 
-    console.log('Done: ' + total + ' talks, ' + enriched + ' enriched');
+    const status = hasMore ? 'partial' : 'complete';
+    console.log(`Done (${status}): ${total} talks from pages ${startPage}-${page - 1}, ${enriched} enriched. Next run starts at page ${nextPage}`);
+
     return new Response(
-      JSON.stringify({ success: true, synced: total, enriched }),
+      JSON.stringify({ success: true, status, synced: total, enriched, startPage, nextPage }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
