@@ -27,11 +27,11 @@ async function refreshTokenIfNeeded(config: KommoConfig, supabase: any): Promise
 
   console.log('Refreshing Kommo access token...');
   
-  const clientId = Deno.env.get('KOMMO_CLIENT_ID');
-  const clientSecret = Deno.env.get('KOMMO_CLIENT_SECRET');
+  const clientId = config.integration_id;
+  const clientSecret = config.secret_key;
   
   if (!clientId || !clientSecret) {
-    throw new Error('KOMMO_CLIENT_ID and KOMMO_CLIENT_SECRET must be configured');
+    throw new Error('Integration ID and Secret Key not found in kommo_config');
   }
 
   const response = await fetch(`https://${config.subdomain}.kommo.com/oauth2/access_token`, {
