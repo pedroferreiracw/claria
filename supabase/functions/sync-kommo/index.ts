@@ -17,7 +17,9 @@ async function fetchKommo(subdomain: string, token: string, endpoint: string, pa
     const body = (await res.text()).substring(0, 300);
     throw new Error(`Kommo ${res.status}: ${body}`);
   }
-  return res.json();
+  const text = await res.text();
+  if (!text || text.trim() === '') return { _embedded: {} };
+  return JSON.parse(text);
 }
 
 function fetchKommoWithArrayFilters(
