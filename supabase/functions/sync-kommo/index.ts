@@ -12,6 +12,8 @@ interface KommoConfig {
   refresh_token: string;
   token_expires_at: string | null;
   scope_id: string | null;
+  integration_id: string | null;
+  secret_key: string | null;
 }
 
 async function refreshTokenIfNeeded(config: KommoConfig, supabase: any): Promise<string> {
