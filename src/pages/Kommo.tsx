@@ -106,10 +106,10 @@ export default function KommoPage() {
             </p>
             <div className="flex items-center gap-2 mt-3">
               <Badge variant="outline" className="text-xs">
-                <RefreshCw className="h-3 w-3 mr-1" /> Sync: a cada 30min
+                <RefreshCw className="h-3 w-3 mr-1" /> Sync: a cada 15min
               </Badge>
               <Badge variant="outline" className="text-xs">
-                IA: a cada 30min (offset 15min)
+                IA: a cada 15min (offset 7min)
               </Badge>
             </div>
           </div>
