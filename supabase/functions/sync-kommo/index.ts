@@ -94,28 +94,37 @@ Deno.serve(async (req) => {
       console.log('Page ' + page + ': ' + talks.length + ' talks');
 
       for (const talk of talks) {
-        const rawId = talk.id || talk.talk_id || talk._id;
-        if (!rawId) {
-          if (page === 1 && totalSynced === 0) {
-            console.error('Talk without id, keys: ' + JSON.stringify(Object.keys(talk)));
-          }
+        const kommoId = String(talk.talk_id);
+        if (!talk.talk_id) {
           continue;
         }
-        const kommoId = String(rawId);
-        const contactName = talk.contact?.name || talk._embedded?.contact?.name || 'Desconhecido';
-        const contactPhone = talk.contact?.phone || null;
 
+        // Get contact name from embedded contacts
+        let contactName = 'Desconhecido';
+        let contactPhone: string | null = null;
+        const embeddedContacts = talk._embedded?.contacts || [];
+        if (embeddedContacts.length > 0) {
+          // We'll need to fetch contact details to get name/phone
+          const contactId = embeddedContacts[0].id || talk.contact_id;
+          if (contactId) {
+            try {
+              const contactData = await fetchKommoAPI(config.subdomain, config.access_token, '/api/v4/contacts/' + contactId);
+              contactName = contactData?.name || 'Desconhecido';
+              const phones = contactData?.custom_fields_values?.find((f: any) => f.field_code === 'PHONE');
+              if (phones?.values?.[0]?.value) {
+                contactPhone = phones.values[0].value;
+              }
+            } catch (_e) {
+              // Contact fetch failed, use fallback
+            }
+          }
+        }
+
+        // Map SDR - talks don't have created_by, we'll skip SDR mapping for now
+        // SDR mapping will be done via the events' user info
         let sdrId: string | null = null;
-        const responsibleUserId = talk.created_by || talk.responsible_user_id;
-        let responsibleName: string | null = null;
-        if (responsibleUserId && kommoUserMap.has(responsibleUserId)) {
-          responsibleName = kommoUserMap.get(responsibleUserId)!;
-        } else if (talk.created_by_name) {
-          responsibleName = talk.created_by_name;
-        }
-        if (responsibleName) {
-          sdrId = sdrMap.get(responsibleName.toLowerCase()) || null;
-        }
+
+        const isClosed = talk.status === 'closed';
 
         const { data: convData } = await supabase
           .from('kommo_conversations')
@@ -124,9 +133,9 @@ Deno.serve(async (req) => {
             sdr_id: sdrId,
             lead_name: contactName,
             lead_phone: contactPhone,
-            status: talk.is_closed ? 'closed' : 'active',
+            status: isClosed ? 'closed' : 'active',
             started_at: talk.created_at ? new Date(talk.created_at * 1000).toISOString() : null,
-            finished_at: talk.closed_at ? new Date(talk.closed_at * 1000).toISOString() : null,
+            finished_at: isClosed && talk.updated_at ? new Date(talk.updated_at * 1000).toISOString() : null,
             synced_at: new Date().toISOString(),
           }, { onConflict: 'kommo_id' })
           .select('id')
