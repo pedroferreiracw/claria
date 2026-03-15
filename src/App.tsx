@@ -23,6 +23,7 @@ import MeetimePage from "./pages/Meetime";
 import ClosersPage from "./pages/Closers";
 import CloserEvaluationsPage from "./pages/CloserEvaluations";
 import KommoPage from "./pages/Kommo";
+import IntelligencePage from "./pages/Intelligence";
 import AuthPage from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
