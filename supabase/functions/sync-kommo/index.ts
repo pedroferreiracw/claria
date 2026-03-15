@@ -5,265 +5,93 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface KommoConfig {
-  id: string;
-  subdomain: string;
-  access_token: string;
-}
-
-async function fetchKommoAPI(subdomain: string, token: string, endpoint: string, params: Record<string, string> = {}) {
+async function fetchKommo(subdomain: string, token: string, endpoint: string, params: Record<string, string> = {}) {
   const url = new URL(`https://${subdomain}.kommo.com${endpoint}`);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  
-  const response = await fetch(url.toString(), {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Kommo API error (${response.status}): ${errorText}`);
-  }
-
-  return response.json();
+  const res = await fetch(url.toString(), { headers: { 'Authorization': `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Kommo ${res.status}: ${(await res.text()).substring(0, 200)}`);
+  return res.json();
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-    const { data: configs, error: configError } = await supabase
-      .from('kommo_config')
-      .select('id, subdomain, access_token')
-      .eq('is_connected', true)
-      .limit(1);
+    const { data: configs } = await supabase.from('kommo_config').select('id, subdomain, access_token').eq('is_connected', true).limit(1);
+    if (!configs?.length) return new Response(JSON.stringify({ error: 'Not configured' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-    if (configError || !configs?.length) {
-      return new Response(
-        JSON.stringify({ error: 'Kommo not configured or not connected' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const config = configs[0];
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const fromUnix = Math.floor(startOfMonth.getTime() / 1000);
 
-    const config = configs[0] as KommoConfig;
-
-    // Date filter: start of current month
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfMonthUnix = Math.floor(startOfMonth.getTime() / 1000);
-
-    // Fetch Kommo users once for SDR mapping
-    const kommoUserMap = new Map<number, string>();
-    try {
-      const usersData = await fetchKommoAPI(config.subdomain, config.access_token, '/api/v4/users');
-      const users = usersData?._embedded?.users || [];
-      for (const u of users) {
-        kommoUserMap.set(u.id, u.name);
-      }
-      console.log(`Mapped ${kommoUserMap.size} Kommo users`);
-    } catch (e) {
-      console.error('Could not fetch Kommo users:', e);
-    }
-
-    // Get local SDRs for matching by name
-    const { data: sdrs } = await supabase.from('sdrs').select('id, name').eq('team_type', 'SDR');
-    const sdrMap = new Map((sdrs || []).map((s: any) => [s.name.toLowerCase(), s.id]));
-
-    let totalSynced = 0;
+    // Sync all talks - metadata only, fast
+    let total = 0;
     let page = 1;
     let hasMore = true;
 
     while (hasMore) {
-      console.log(`Fetching talks page ${page}...`);
-      
-      let talksData;
-      try {
-        talksData = await fetchKommoAPI(config.subdomain, config.access_token, '/api/v4/talks', {
-          page: String(page),
-          limit: '250',
-          'filter[created_at][from]': String(startOfMonthUnix),
-        });
-      } catch (e) {
-        console.error(`Error fetching page ${page}:`, e);
-        break;
+      const data = await fetchKommo(config.subdomain, config.access_token, '/api/v4/talks', {
+        page: String(page), limit: '250',
+        'filter[created_at][from]': String(fromUnix),
+      });
+      const talks = data?._embedded?.talks || [];
+      if (!talks.length) break;
+
+      console.log('Page ' + page + ': ' + talks.length + ' talks');
+
+      const upserts = talks.filter((t: any) => t.talk_id).map((t: any) => ({
+        kommo_id: String(t.talk_id),
+        lead_name: 'Conversa #' + t.talk_id,
+        status: t.status === 'closed' ? 'closed' : 'active',
+        started_at: t.created_at ? new Date(t.created_at * 1000).toISOString() : null,
+        finished_at: t.status === 'closed' ? new Date((t.updated_at || t.created_at) * 1000).toISOString() : null,
+        synced_at: new Date().toISOString(),
+      }));
+
+      if (upserts.length > 0) {
+        await supabase.from('kommo_conversations').upsert(upserts, { onConflict: 'kommo_id' });
+        total += upserts.length;
       }
 
-      const talks = talksData?._embedded?.talks || [];
-      if (talks.length === 0) {
-        hasMore = false;
-        break;
-      }
-
-      console.log(`Page ${page}: ${talks.length} talks`);
-
-      for (const talk of talks) {
-        const kommoId = String(talk.id);
-        if (!talk.id) {
-          console.error('Talk without id, skipping');
-          continue;
-        }
-
-        const contactName = talk.contact?.name || talk._embedded?.contact?.name || 'Desconhecido';
-        const contactPhone = talk.contact?.phone || null;
-        
-        // Match SDR by responsible user
-        let sdrId = null;
-        const responsibleUserId = talk.created_by || talk.responsible_user_id;
-        let responsibleName: string | null = null;
-        if (responsibleUserId && kommoUserMap.has(responsibleUserId)) {
-          responsibleName = kommoUserMap.get(responsibleUserId)!;
-        } else if (talk.created_by_name) {
-          responsibleName = talk.created_by_name;
-        }
-        
-        if (responsibleName) {
-          sdrId = sdrMap.get(responsibleName.toLowerCase()) || null;
-        }
-
-        // Upsert conversation
-        const { data: convData } = await supabase
-          .from('kommo_conversations')
-          .upsert({
-            kommo_id: kommoId,
-            sdr_id: sdrId,
-            lead_name: contactName,
-            lead_phone: contactPhone,
-            status: talk.is_closed ? 'closed' : 'active',
-            started_at: talk.created_at ? new Date(talk.created_at * 1000).toISOString() : null,
-            finished_at: talk.closed_at ? new Date(talk.closed_at * 1000).toISOString() : null,
-            synced_at: new Date().toISOString(),
-          }, { onConflict: 'kommo_id' })
-          .select('id')
-          .single();
-
-        if (!convData) continue;
-
-        // Fetch messages via events API (incoming_chat_message + outgoing_chat_message)
-        try {
-          // Get the contact/entity linked to this talk
-          const entityId = talk.entity_id;
-          const entityType = talk.entity_type; // 'contacts' or 'leads'
-          
-          if (entityId && entityType) {
-            // Fetch chat events for this entity
-            const eventsData = await fetchKommoAPI(
-              config.subdomain, config.access_token,
-              '/api/v4/events',
-              { 
-                'filter[type][]': 'incoming_chat_message',
-                'filter[entity][]': entityType === 'contacts' ? 'contact' : 'lead',
-                'filter[entity_id][]': String(entityId),
-                'filter[created_at][from]': String(startOfMonthUnix),
-                limit: '100',
-              }
-            );
-
-            // Also fetch outgoing
-            const outEventsData = await fetchKommoAPI(
-              config.subdomain, config.access_token,
-              '/api/v4/events',
-              {
-                'filter[type][]': 'outgoing_chat_message',
-                'filter[entity][]': entityType === 'contacts' ? 'contact' : 'lead', 
-                'filter[entity_id][]': String(entityId),
-                'filter[created_at][from]': String(startOfMonthUnix),
-                limit: '100',
-              }
-            );
-
-            const inEvents = eventsData?._embedded?.events || [];
-            const outEvents = outEventsData?._embedded?.events || [];
-            const allEvents = [...inEvents, ...outEvents].sort((a, b) => a.created_at - b.created_at);
-
-            let prevSentAt: Date | null = null;
-            let totalResponseTime = 0;
-            let responseCount = 0;
-
-            for (const evt of allEvents) {
-              const sentAt = new Date(evt.created_at * 1000);
-              const senderType = evt.type === 'incoming_chat_message' ? 'lead' : 'sdr';
-              const kommoMessageId = `${kommoId}_evt_${evt.id}`;
-              
-              // Extract message text from event value_after
-              let content = '[mensagem]';
-              if (evt.value_after) {
-                const va = evt.value_after;
-                if (Array.isArray(va) && va.length > 0) {
-                  content = va[0]?.message?.text || va[0]?.text || '[mensagem]';
-                } else if (typeof va === 'object') {
-                  content = va.message?.text || va.text || '[mensagem]';
-                }
-              }
-
-              let responseTimeSec = null;
-              if (senderType === 'sdr' && prevSentAt) {
-                responseTimeSec = Math.round((sentAt.getTime() - prevSentAt.getTime()) / 1000);
-                if (responseTimeSec > 0 && responseTimeSec < 86400) {
-                  totalResponseTime += responseTimeSec;
-                  responseCount++;
-                }
-              }
-              prevSentAt = sentAt;
-
-              await supabase
-                .from('kommo_messages')
-                .upsert({
-                  kommo_message_id: kommoMessageId,
-                  conversation_id: convData.id,
-                  sender_type: senderType,
-                  sender_name: senderType === 'lead' ? contactName : responsibleName,
-                  content,
-                  sent_at: sentAt.toISOString(),
-                  response_time_seconds: responseTimeSec,
-                }, { onConflict: 'kommo_message_id' });
-            }
-
-            const avgResponseTime = responseCount > 0 ? Math.round(totalResponseTime / responseCount) : null;
-            await supabase
-              .from('kommo_conversations')
-              .update({
-                messages_count: allEvents.length,
-                avg_response_time_seconds: avgResponseTime,
-              })
-              .eq('id', convData.id);
-          }
-        } catch (msgError) {
-          console.error(`Error fetching events for talk ${kommoId}:`, msgError);
-        }
-
-        totalSynced++;
-      }
-
-      if (talks.length < 250) {
-        hasMore = false;
-      } else {
-        page++;
-      }
+      hasMore = talks.length >= 250;
+      page++;
     }
 
-    // Update last sync time
-    await supabase
-      .from('kommo_config')
-      .update({ last_sync_at: new Date().toISOString() })
-      .eq('id', config.id);
+    // Now enrich: fetch contact names for up to 20 conversations without real names
+    const { data: unnamed } = await supabase
+      .from('kommo_conversations')
+      .select('id, kommo_id')
+      .like('lead_name', 'Conversa #%')
+      .limit(20);
 
-    console.log(`Sync complete: ${totalSynced} conversations across ${page} pages`);
+    let enriched = 0;
+    for (const conv of (unnamed || [])) {
+      try {
+        const talkData = await fetchKommo(config.subdomain, config.access_token, '/api/v4/talks/' + conv.kommo_id);
+        if (talkData?.contact_id) {
+          const contact = await fetchKommo(config.subdomain, config.access_token, '/api/v4/contacts/' + talkData.contact_id);
+          if (contact?.name) {
+            let phone: string | null = null;
+            const pf = contact?.custom_fields_values?.find((f: any) => f.field_code === 'PHONE');
+            if (pf?.values?.[0]?.value) phone = pf.values[0].value;
+            await supabase.from('kommo_conversations').update({ lead_name: contact.name, lead_phone: phone }).eq('id', conv.id);
+            enriched++;
+          }
+        }
+      } catch (_e) { /* skip */ }
+    }
 
+    await supabase.from('kommo_config').update({ last_sync_at: new Date().toISOString() }).eq('id', config.id);
+
+    console.log('Done: ' + total + ' talks, ' + enriched + ' enriched');
     return new Response(
-      JSON.stringify({ success: true, synced: totalSynced, pages: page }),
+      JSON.stringify({ success: true, synced: total, enriched }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
-  } catch (error) {
-    console.error('Sync Kommo error:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+  } catch (error: any) {
+    console.error('Sync error:', error);
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
