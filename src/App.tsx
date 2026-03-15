@@ -22,6 +22,7 @@ import PipedrivePage from "./pages/Pipedrive";
 import MeetimePage from "./pages/Meetime";
 import ClosersPage from "./pages/Closers";
 import CloserEvaluationsPage from "./pages/CloserEvaluations";
+import KommoPage from "./pages/Kommo";
 import AuthPage from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
