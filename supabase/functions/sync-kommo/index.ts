@@ -232,6 +232,21 @@ Deno.serve(async (req) => {
 
     console.log(`Conversations needing messages: ${(convsNeedMsgs || []).length}`);
 
+    // First: quick debug fetch to see if events API works at all
+    if ((convsNeedMsgs || []).length > 0) {
+      try {
+        const debugUrl = new URL(`https://${config.subdomain}.kommo.com/api/v4/events`);
+        debugUrl.searchParams.append('filter[type][]', 'incoming_chat_message');
+        debugUrl.searchParams.append('filter[type][]', 'outgoing_chat_message');
+        debugUrl.searchParams.set('limit', '3');
+        const debugRes = await fetch(debugUrl.toString(), { headers: { Authorization: `Bearer ${config.access_token}` } });
+        const debugText = await debugRes.text();
+        console.log(`Events API debug (status=${debugRes.status}): ${debugText.substring(0, 1500)}`);
+      } catch (e: any) {
+        console.log(`Events debug error: ${e.message.substring(0, 200)}`);
+      }
+    }
+
     for (const conv of (convsNeedMsgs || [])) {
       try {
         // Fetch events for this lead filtered by chat message types
