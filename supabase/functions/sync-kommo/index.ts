@@ -60,6 +60,24 @@ Deno.serve(async (req) => {
     if (!configs?.length) return resp({ error: 'Kommo not configured' }, 400);
     const config = configs[0];
 
+    // Auto-fetch scope_id (amojo_id) if not set
+    if (!config.scope_id) {
+      try {
+        const accountData = await fetchKommo(config.subdomain, config.access_token, '/api/v4/account', { with: 'amojo_id' });
+        const amojoId = accountData?.amojo_id;
+        if (amojoId) {
+          config.scope_id = amojoId;
+          await supabase.from('kommo_config').update({ scope_id: amojoId }).eq('id', config.id);
+          console.log(`Auto-fetched scope_id (amojo_id): ${amojoId}`);
+        } else {
+          console.log('Account response:', JSON.stringify(accountData).substring(0, 500));
+          console.log('Warning: amojo_id not found in account data');
+        }
+      } catch (e: any) {
+        console.error('Error fetching amojo_id:', e.message);
+      }
+    }
+
     // ══════════════════════════════════════════════════════════
     // PHASE A: Discover pre-sales users (cached)
     // ══════════════════════════════════════════════════════════
