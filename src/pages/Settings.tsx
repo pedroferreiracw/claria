@@ -163,6 +163,10 @@ export default function SettingsPage() {
               <Menu className="h-4 w-4" />
               Menu
             </TabsTrigger>
+            <TabsTrigger value="integrations" className="flex items-center gap-2">
+              <Plug className="h-4 w-4" />
+              Integrações
+            </TabsTrigger>
           </TabsList>
 
           {/* Theme Tab */}
