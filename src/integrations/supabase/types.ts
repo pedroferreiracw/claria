@@ -484,14 +484,19 @@ export type Database = {
         Row: {
           ai_analysis_id: string | null
           avg_response_time_seconds: number | null
+          chat_id: string | null
           created_at: string
+          fetch_error: string | null
+          fetch_status: string | null
           finished_at: string | null
           id: string
           kommo_contact_id: string | null
           kommo_id: string
+          last_fetch_attempt_at: string | null
           lead_email: string | null
           lead_name: string | null
           lead_phone: string | null
+          message_source: string | null
           messages_count: number | null
           responsible_user_id: number | null
           sdr_id: string | null
@@ -502,14 +507,19 @@ export type Database = {
         Insert: {
           ai_analysis_id?: string | null
           avg_response_time_seconds?: number | null
+          chat_id?: string | null
           created_at?: string
+          fetch_error?: string | null
+          fetch_status?: string | null
           finished_at?: string | null
           id?: string
           kommo_contact_id?: string | null
           kommo_id: string
+          last_fetch_attempt_at?: string | null
           lead_email?: string | null
           lead_name?: string | null
           lead_phone?: string | null
+          message_source?: string | null
           messages_count?: number | null
           responsible_user_id?: number | null
           sdr_id?: string | null
@@ -520,14 +530,19 @@ export type Database = {
         Update: {
           ai_analysis_id?: string | null
           avg_response_time_seconds?: number | null
+          chat_id?: string | null
           created_at?: string
+          fetch_error?: string | null
+          fetch_status?: string | null
           finished_at?: string | null
           id?: string
           kommo_contact_id?: string | null
           kommo_id?: string
+          last_fetch_attempt_at?: string | null
           lead_email?: string | null
           lead_name?: string | null
           lead_phone?: string | null
+          message_source?: string | null
           messages_count?: number | null
           responsible_user_id?: number | null
           sdr_id?: string | null
