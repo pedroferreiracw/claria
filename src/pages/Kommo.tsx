@@ -162,7 +162,7 @@ export default function KommoPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os SDRs</SelectItem>
-              {sdrs.filter(s => s.team_type === 'SDR').map(sdr => (
+              {sdrs.map(sdr => (
                 <SelectItem key={sdr.id} value={sdr.id}>{sdr.name}</SelectItem>
               ))}
             </SelectContent>

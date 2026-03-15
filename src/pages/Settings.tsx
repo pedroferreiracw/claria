@@ -416,8 +416,101 @@ export default function SettingsPage() {
               </Button>
             </div>
           </TabsContent>
+
+          {/* Integrations Tab */}
+          <TabsContent value="integrations" className="space-y-6">
+            <KommoSettingsSection />
+          </TabsContent>
         </Tabs>
       </div>
     </MainLayout>
+  );
+}
+
+function KommoSettingsSection() {
+  const { data: config, isLoading } = useKommoConfig();
+  const saveConfig = useSaveKommoConfig();
+  const [subdomain, setSubdomain] = useState('');
+  const [accessToken, setAccessToken] = useState('');
+  const [refreshToken, setRefreshToken] = useState('');
+
+  if (isLoading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />;
+
+  return (
+    <div className="glass-card rounded-xl p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            Kommo CRM
+            {config?.is_connected ? (
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+            ) : (
+              <XCircle className="h-5 w-5 text-muted-foreground" />
+            )}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Conecte sua conta da Kommo para importar conversas de prospecção automaticamente.
+          </p>
+        </div>
+      </div>
+
+      {config?.is_connected ? (
+        <div className="space-y-3">
+          <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+            <p className="text-sm font-medium text-green-500">✓ Conectado ao subdomínio: {config.subdomain}</p>
+            {config.last_sync_at && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Última sincronização: {new Date(config.last_sync_at).toLocaleString('pt-BR')}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Para conectar, crie uma integração privada na Kommo (Configurações → Integrações) e obtenha o access token e refresh token via OAuth 2.0.
+          </p>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Subdomínio</Label>
+              <Input
+                value={subdomain}
+                onChange={(e) => setSubdomain(e.target.value)}
+                placeholder="suaempresa (de suaempresa.kommo.com)"
+                className="bg-secondary"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Access Token</Label>
+              <Input
+                type="password"
+                value={accessToken}
+                onChange={(e) => setAccessToken(e.target.value)}
+                placeholder="Cole o access_token aqui"
+                className="bg-secondary"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Refresh Token</Label>
+              <Input
+                type="password"
+                value={refreshToken}
+                onChange={(e) => setRefreshToken(e.target.value)}
+                placeholder="Cole o refresh_token aqui"
+                className="bg-secondary"
+              />
+            </div>
+          </div>
+          <Button
+            onClick={() => saveConfig.mutate({ subdomain, access_token: accessToken, refresh_token: refreshToken })}
+            disabled={!subdomain || !accessToken || !refreshToken || saveConfig.isPending}
+            className="w-full"
+          >
+            {saveConfig.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Conectar Kommo
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
