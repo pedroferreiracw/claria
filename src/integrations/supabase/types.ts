@@ -368,6 +368,70 @@ export type Database = {
           },
         ]
       }
+      kommo_analyses: {
+        Row: {
+          ai_feedback: Json | null
+          analyzed_at: string
+          conversation_id: string
+          created_at: string
+          evaluation_id: string | null
+          final_score: number
+          id: string
+          objections: Json
+          result: string | null
+          scores: Json
+          sdr_id: string | null
+        }
+        Insert: {
+          ai_feedback?: Json | null
+          analyzed_at?: string
+          conversation_id: string
+          created_at?: string
+          evaluation_id?: string | null
+          final_score?: number
+          id?: string
+          objections?: Json
+          result?: string | null
+          scores?: Json
+          sdr_id?: string | null
+        }
+        Update: {
+          ai_feedback?: Json | null
+          analyzed_at?: string
+          conversation_id?: string
+          created_at?: string
+          evaluation_id?: string | null
+          final_score?: number
+          id?: string
+          objections?: Json
+          result?: string | null
+          scores?: Json
+          sdr_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kommo_analyses_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "kommo_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kommo_analyses_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "evaluations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kommo_analyses_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdrs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kommo_config: {
         Row: {
           access_token: string | null
@@ -488,6 +552,7 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
+          kommo_message_id: string | null
           response_time_seconds: number | null
           sender_name: string | null
           sender_type: string
@@ -498,6 +563,7 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
+          kommo_message_id?: string | null
           response_time_seconds?: number | null
           sender_name?: string | null
           sender_type: string
@@ -508,6 +574,7 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
+          kommo_message_id?: string | null
           response_time_seconds?: number | null
           sender_name?: string | null
           sender_type?: string
