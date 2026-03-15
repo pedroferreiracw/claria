@@ -300,6 +300,109 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════════════
+    // DIAGNOSE2 MODE: Test Amojo with correct chat_id UUID
+    // ══════════════════════════════════════════════════════════
+    if (mode === 'diagnose2') {
+      console.log('=== DIAGNOSE2: Amojo with chat_id UUID ===');
+      const results: Record<string, any> = {};
+
+      // Get a talk with chat_id
+      const talksData = await fetchKommo(config.subdomain, config.access_token, '/api/v4/talks', { limit: '3', with: 'contacts' });
+      const talks = talksData?._embedded?.talks || [];
+      if (!talks.length) return resp({ error: 'No talks found' });
+
+      const talk = talks[0];
+      const chatId = talk.chat_id;
+      const talkId = talk.talk_id || talk.id;
+      console.log(`Talk: id=${talkId}, chat_id=${chatId}, origin=${talk.origin}, contact=${talk.contact_id}`);
+      results.talk = { id: talkId, chat_id: chatId, origin: talk.origin, contact_id: talk.contact_id };
+
+      if (config.scope_id && config.secret_key && chatId) {
+        // Test A: Amojo with chat_id UUID, origin=custom
+        const origins = ['custom', 'waba', 'com.amocrm.amocrmwa'];
+        for (const origin of origins) {
+          try {
+            const path = `/v2/origin/${origin}/${config.scope_id}/chats/${chatId}/history`;
+            const url = `https://amojo.kommo.com${path}?offset=0&limit=50`;
+            const dateStr = new Date().toUTCString();
+            const signStr = ['GET', '', '', dateStr, path].join('\n');
+            const signature = await hmacSha1(config.secret_key, signStr);
+            const res = await fetch(url, {
+              headers: { 'Date': dateStr, 'Content-Type': 'application/json', 'X-Signature': signature },
+            });
+            const text = await res.text();
+            results[`amojo_${origin}`] = { status: res.status, body: text.substring(0, 1500) };
+            console.log(`Amojo origin=${origin} (${res.status}): ${text.substring(0, 1500)}`);
+          } catch (e: any) {
+            results[`amojo_${origin}`] = { error: e.message };
+            console.log(`Amojo origin=${origin} error: ${e.message}`);
+          }
+        }
+
+        // Test B: Try without origin in path (direct chats)
+        try {
+          const path = `/v2/chats/${chatId}/history`;
+          const url = `https://amojo.kommo.com${path}?offset=0&limit=50`;
+          const dateStr = new Date().toUTCString();
+          const signStr = ['GET', '', '', dateStr, path].join('\n');
+          const signature = await hmacSha1(config.secret_key, signStr);
+          const res = await fetch(url, {
+            headers: { 'Date': dateStr, 'Content-Type': 'application/json', 'X-Signature': signature },
+          });
+          const text = await res.text();
+          results.amojo_direct = { status: res.status, body: text.substring(0, 1500) };
+          console.log(`Amojo direct (${res.status}): ${text.substring(0, 1500)}`);
+        } catch (e: any) {
+          results.amojo_direct = { error: e.message };
+        }
+
+        // Test C: Try v1 API
+        try {
+          const path = `/v1/chats/${chatId}/history`;
+          const url = `https://amojo.kommo.com${path}?offset=0&limit=50`;
+          const dateStr = new Date().toUTCString();
+          const signStr = ['GET', '', '', dateStr, path].join('\n');
+          const signature = await hmacSha1(config.secret_key, signStr);
+          const res = await fetch(url, {
+            headers: { 'Date': dateStr, 'Content-Type': 'application/json', 'X-Signature': signature },
+          });
+          const text = await res.text();
+          results.amojo_v1 = { status: res.status, body: text.substring(0, 1500) };
+          console.log(`Amojo v1 (${res.status}): ${text.substring(0, 1500)}`);
+        } catch (e: any) {
+          results.amojo_v1 = { error: e.message };
+        }
+
+        // Test D: Use Bearer token on amojo instead of HMAC
+        try {
+          const url = `https://amojo.kommo.com/v2/origin/custom/${config.scope_id}/chats/${chatId}/history?offset=0&limit=50`;
+          const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${config.access_token}` },
+          });
+          const text = await res.text();
+          results.amojo_bearer = { status: res.status, body: text.substring(0, 1500) };
+          console.log(`Amojo bearer (${res.status}): ${text.substring(0, 1500)}`);
+        } catch (e: any) {
+          results.amojo_bearer = { error: e.message };
+        }
+      }
+
+      // Test E: /api/v4/talks/{id}/messages with Bearer (even if 403, log it)
+      try {
+        const url = `https://${config.subdomain}.kommo.com/api/v4/talks/${talkId}/messages?limit=10`;
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${config.access_token}` } });
+        const text = await res.text();
+        results.talk_messages = { status: res.status, body: text.substring(0, 1500) };
+        console.log(`Talk messages (${res.status}): ${text.substring(0, 500)}`);
+      } catch (e: any) {
+        results.talk_messages = { error: e.message };
+      }
+
+      console.log('=== DIAGNOSE2 COMPLETE ===');
+      return resp({ success: true, results });
+    }
+
+    // ══════════════════════════════════════════════════════════
     // NORMAL SYNC MODE
     // ══════════════════════════════════════════════════════════
 
