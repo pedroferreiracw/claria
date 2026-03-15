@@ -30,6 +30,19 @@ export interface KommoMessage {
   response_time_seconds: number | null;
 }
 
+export interface KommoAnalysis {
+  id: string;
+  conversation_id: string;
+  sdr_id: string | null;
+  evaluation_id: string | null;
+  scores: Record<string, number>;
+  ai_feedback: any;
+  objections: any[];
+  result: string | null;
+  final_score: number;
+  analyzed_at: string;
+}
+
 export interface KommoConfig {
   id: string;
   subdomain: string | null;
@@ -87,6 +100,39 @@ export function useKommoMessages(conversationId: string | null) {
         .order('sent_at', { ascending: true });
       if (error) throw error;
       return (data || []) as KommoMessage[];
+    },
+    enabled: !!conversationId,
+  });
+}
+
+export function useKommoAnalyses(filters?: { sdrId?: string }) {
+  return useQuery({
+    queryKey: ['kommo-analyses', filters],
+    queryFn: async () => {
+      let query = (supabase.from('kommo_analyses') as any)
+        .select('*')
+        .order('analyzed_at', { ascending: false });
+
+      if (filters?.sdrId) query = query.eq('sdr_id', filters.sdrId);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as KommoAnalysis[];
+    },
+  });
+}
+
+export function useKommoAnalysisForConversation(conversationId: string | null) {
+  return useQuery({
+    queryKey: ['kommo-analysis', conversationId],
+    queryFn: async () => {
+      if (!conversationId) return null;
+      const { data, error } = await (supabase.from('kommo_analyses') as any)
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as KommoAnalysis | null;
     },
     enabled: !!conversationId,
   });
