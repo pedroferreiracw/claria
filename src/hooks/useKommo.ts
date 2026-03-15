@@ -119,30 +119,12 @@ export function useSaveKommoConfig() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (config: { 
-      subdomain: string; 
-      integration_id: string; 
-      secret_key: string; 
-      auth_code: string;
-    }) => {
-      // Exchange auth code for tokens via Edge Function
-      const { data: tokenData, error: fnError } = await supabase.functions.invoke('kommo-auth', {
-        body: config,
-      });
-
-      if (fnError) throw new Error(fnError.message);
-      if (tokenData?.error) throw new Error(tokenData.error);
-
-      // Save config with obtained tokens
+    mutationFn: async (config: { subdomain: string; long_lived_token: string }) => {
       const { data: existing } = await supabase.from('kommo_config').select('id').limit(1).maybeSingle();
       
       const configData = {
         subdomain: config.subdomain,
-        integration_id: config.integration_id,
-        secret_key: config.secret_key,
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
-        token_expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
+        access_token: config.long_lived_token,
         is_connected: true,
         updated_at: new Date().toISOString(),
       };
