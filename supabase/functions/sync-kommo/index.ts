@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
       .select('id, kommo_id, sdr_id')
       .not('sdr_id', 'is', null)
       .or('messages_count.eq.0,messages_count.is.null')
-      .order('started_at', { ascending: false })
+      .order('started_at', { ascending: true })
       .limit(MAX_MSG_TALKS);
 
     console.log(`Conversations needing messages: ${(convsNeedMsgs || []).length}`);
