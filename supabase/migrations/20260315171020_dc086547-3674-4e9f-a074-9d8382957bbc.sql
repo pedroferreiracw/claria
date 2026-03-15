@@ -1,0 +1,1 @@
+UPDATE public.kommo_conversations SET messages_count = 0 WHERE messages_count = -1;
