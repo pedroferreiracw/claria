@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.kommo-auth]
 verify_jwt = false
+
+[functions.auto-analyze-kommo]
+verify_jwt = false
