@@ -52,13 +52,13 @@ Deno.serve(async (req) => {
 
     const config = configs[0] as KommoConfig;
 
-    // Date filter: start of current month (March 2026)
+    // Date filter: start of current month
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfMonthUnix = Math.floor(startOfMonth.getTime() / 1000);
 
     // Fetch Kommo users once for SDR mapping
-    let kommoUserMap = new Map<number, string>();
+    const kommoUserMap = new Map<number, string>();
     try {
       const usersData = await fetchKommoAPI(config.subdomain, config.access_token, '/api/v4/users');
       const users = usersData?._embedded?.users || [];
@@ -99,17 +99,27 @@ Deno.serve(async (req) => {
         break;
       }
 
+      console.log(`Page ${page}: ${talks.length} talks`);
+
       for (const talk of talks) {
         const kommoId = String(talk.id);
+        if (!talk.id) {
+          console.error('Talk without id, skipping');
+          continue;
+        }
+
         const contactName = talk.contact?.name || talk._embedded?.contact?.name || 'Desconhecido';
         const contactPhone = talk.contact?.phone || null;
         
         // Match SDR by responsible user
         let sdrId = null;
         const responsibleUserId = talk.created_by || talk.responsible_user_id;
-        const responsibleName = responsibleUserId 
-          ? kommoUserMap.get(responsibleUserId) 
-          : (talk.created_by_name || talk._embedded?.user?.name);
+        let responsibleName: string | null = null;
+        if (responsibleUserId && kommoUserMap.has(responsibleUserId)) {
+          responsibleName = kommoUserMap.get(responsibleUserId)!;
+        } else if (talk.created_by_name) {
+          responsibleName = talk.created_by_name;
+        }
         
         if (responsibleName) {
           sdrId = sdrMap.get(responsibleName.toLowerCase()) || null;
@@ -133,64 +143,102 @@ Deno.serve(async (req) => {
 
         if (!convData) continue;
 
-        // Fetch messages for this talk
+        // Fetch messages via events API (incoming_chat_message + outgoing_chat_message)
         try {
-          const messagesData = await fetchKommoAPI(
-            config.subdomain, config.access_token,
-            `/api/v4/talks/${kommoId}/messages`,
-            { limit: '100' }
-          );
-
-          const messages = messagesData?._embedded?.messages || [];
-          let prevSentAt: Date | null = null;
-          let totalResponseTime = 0;
-          let responseCount = 0;
-
-          for (const msg of messages) {
-            const sentAt = new Date(msg.created_at * 1000);
-            const senderType = msg.is_incoming ? 'lead' : 'sdr';
-            const kommoMessageId = `${kommoId}_${msg.id || msg.created_at}`;
-            
-            let responseTimeSec = null;
-            if (senderType === 'sdr' && prevSentAt) {
-              responseTimeSec = Math.round((sentAt.getTime() - prevSentAt.getTime()) / 1000);
-              if (responseTimeSec > 0 && responseTimeSec < 86400) {
-                totalResponseTime += responseTimeSec;
-                responseCount++;
+          // Get the contact/entity linked to this talk
+          const entityId = talk.entity_id;
+          const entityType = talk.entity_type; // 'contacts' or 'leads'
+          
+          if (entityId && entityType) {
+            // Fetch chat events for this entity
+            const eventsData = await fetchKommoAPI(
+              config.subdomain, config.access_token,
+              '/api/v4/events',
+              { 
+                'filter[type][]': 'incoming_chat_message',
+                'filter[entity][]': entityType === 'contacts' ? 'contact' : 'lead',
+                'filter[entity_id][]': String(entityId),
+                'filter[created_at][from]': String(startOfMonthUnix),
+                limit: '100',
               }
+            );
+
+            // Also fetch outgoing
+            const outEventsData = await fetchKommoAPI(
+              config.subdomain, config.access_token,
+              '/api/v4/events',
+              {
+                'filter[type][]': 'outgoing_chat_message',
+                'filter[entity][]': entityType === 'contacts' ? 'contact' : 'lead', 
+                'filter[entity_id][]': String(entityId),
+                'filter[created_at][from]': String(startOfMonthUnix),
+                limit: '100',
+              }
+            );
+
+            const inEvents = eventsData?._embedded?.events || [];
+            const outEvents = outEventsData?._embedded?.events || [];
+            const allEvents = [...inEvents, ...outEvents].sort((a, b) => a.created_at - b.created_at);
+
+            let prevSentAt: Date | null = null;
+            let totalResponseTime = 0;
+            let responseCount = 0;
+
+            for (const evt of allEvents) {
+              const sentAt = new Date(evt.created_at * 1000);
+              const senderType = evt.type === 'incoming_chat_message' ? 'lead' : 'sdr';
+              const kommoMessageId = `${kommoId}_evt_${evt.id}`;
+              
+              // Extract message text from event value_after
+              let content = '[mensagem]';
+              if (evt.value_after) {
+                const va = evt.value_after;
+                if (Array.isArray(va) && va.length > 0) {
+                  content = va[0]?.message?.text || va[0]?.text || '[mensagem]';
+                } else if (typeof va === 'object') {
+                  content = va.message?.text || va.text || '[mensagem]';
+                }
+              }
+
+              let responseTimeSec = null;
+              if (senderType === 'sdr' && prevSentAt) {
+                responseTimeSec = Math.round((sentAt.getTime() - prevSentAt.getTime()) / 1000);
+                if (responseTimeSec > 0 && responseTimeSec < 86400) {
+                  totalResponseTime += responseTimeSec;
+                  responseCount++;
+                }
+              }
+              prevSentAt = sentAt;
+
+              await supabase
+                .from('kommo_messages')
+                .upsert({
+                  kommo_message_id: kommoMessageId,
+                  conversation_id: convData.id,
+                  sender_type: senderType,
+                  sender_name: senderType === 'lead' ? contactName : responsibleName,
+                  content,
+                  sent_at: sentAt.toISOString(),
+                  response_time_seconds: responseTimeSec,
+                }, { onConflict: 'kommo_message_id' });
             }
-            prevSentAt = sentAt;
 
+            const avgResponseTime = responseCount > 0 ? Math.round(totalResponseTime / responseCount) : null;
             await supabase
-              .from('kommo_messages')
-              .upsert({
-                kommo_message_id: kommoMessageId,
-                conversation_id: convData.id,
-                sender_type: senderType,
-                sender_name: msg.author?.name || (senderType === 'lead' ? contactName : responsibleName),
-                content: msg.text || msg.media?.url || '[mídia]',
-                sent_at: sentAt.toISOString(),
-                response_time_seconds: responseTimeSec,
-              }, { onConflict: 'kommo_message_id' });
+              .from('kommo_conversations')
+              .update({
+                messages_count: allEvents.length,
+                avg_response_time_seconds: avgResponseTime,
+              })
+              .eq('id', convData.id);
           }
-
-          const avgResponseTime = responseCount > 0 ? Math.round(totalResponseTime / responseCount) : null;
-          await supabase
-            .from('kommo_conversations')
-            .update({
-              messages_count: messages.length,
-              avg_response_time_seconds: avgResponseTime,
-            })
-            .eq('id', convData.id);
-
         } catch (msgError) {
-          console.error(`Error fetching messages for talk ${kommoId}:`, msgError);
+          console.error(`Error fetching events for talk ${kommoId}:`, msgError);
         }
 
         totalSynced++;
       }
 
-      // Check if there are more pages
       if (talks.length < 250) {
         hasMore = false;
       } else {
