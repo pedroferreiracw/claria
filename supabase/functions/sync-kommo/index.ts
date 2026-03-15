@@ -1,6 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { crypto } from 'https://deno.land/std@0.208.0/crypto/mod.ts';
-import { encode as encodeHex } from 'https://deno.land/std@0.208.0/encoding/hex.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,40 +40,6 @@ function fetchKommoWithArrayFilters(
     });
 }
 
-// HMAC-SHA1 signing for amojo API
-async function signAmojo(secretKey: string, method: string, path: string, contentType: string = ''): Promise<{ date: string; signature: string }> {
-  const date = new Date().toUTCString();
-  const checkString = [method.toUpperCase(), contentType, date, path].join('\n');
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw', encoder.encode(secretKey), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(checkString));
-  const signature = new TextDecoder().decode(encodeHex(new Uint8Array(sig)));
-  return { date, signature };
-}
-
-async function fetchAmojo(scopeId: string, secretKey: string, chatId: string, offset: number = 0) {
-  const path = `/v2/origin/custom/${scopeId}/chats/${chatId}/history`;
-  const fullPath = offset > 0 ? `${path}?offset=${offset}` : path;
-  const { date, signature } = await signAmojo(secretKey, 'GET', path);
-  const url = `https://amojo.kommo.com${fullPath}`;
-  const res = await fetch(url, {
-    headers: {
-      'Date': date,
-      'X-Signature': signature,
-      'Content-Type': 'application/json',
-    },
-  });
-  if (!res.ok) {
-    const body = (await res.text()).substring(0, 300);
-    throw new Error(`Amojo ${res.status}: ${body}`);
-  }
-  const text = await res.text();
-  if (!text || text.trim() === '') return {};
-  return JSON.parse(text);
-}
-
 function resp(body: any, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -91,7 +55,7 @@ Deno.serve(async (req) => {
 
     const { data: configs } = await supabase
       .from('kommo_config')
-      .select('id, subdomain, access_token, scope_id, secret_key')
+      .select('id, subdomain, access_token, scope_id')
       .eq('is_connected', true).limit(1);
     if (!configs?.length) return resp({ error: 'Kommo not configured' }, 400);
     const config = configs[0];
@@ -255,115 +219,131 @@ Deno.serve(async (req) => {
     console.log(`Leads synced: ${totalSynced}`);
 
     // ══════════════════════════════════════════════════════════
-    // PHASE C: Fetch messages via amojo chat history (HMAC auth)
+    // PHASE C: Fetch messages via Events API (Bearer token)
+    // Uses incoming_chat_message / outgoing_chat_message events
     // ══════════════════════════════════════════════════════════
-    if (config.scope_id && config.secret_key) {
-      const { data: convsNeedMsgs } = await supabase
-        .from('kommo_conversations')
-        .select('id, kommo_id, sdr_id, kommo_contact_id, responsible_user_id')
-        .not('sdr_id', 'is', null)
-        .or('messages_count.eq.0,messages_count.is.null')
-        .order('started_at', { ascending: false })
-        .limit(MAX_MSG_CONVS);
+    const { data: convsNeedMsgs } = await supabase
+      .from('kommo_conversations')
+      .select('id, kommo_id, sdr_id, kommo_contact_id, responsible_user_id, lead_name')
+      .not('sdr_id', 'is', null)
+      .or('messages_count.eq.0,messages_count.is.null')
+      .order('started_at', { ascending: false })
+      .limit(MAX_MSG_CONVS);
 
-      console.log(`Conversations needing messages: ${(convsNeedMsgs || []).length}`);
+    console.log(`Conversations needing messages: ${(convsNeedMsgs || []).length}`);
 
-      for (const conv of (convsNeedMsgs || [])) {
-        try {
-          // Step 1: Find the talk to get chat_id (UUID)
-          const talksData = await fetchKommo(
-            config.subdomain, config.access_token, '/api/v4/talks',
-            { 'filter[entity_id]': conv.kommo_id, 'filter[entity_type]': 'leads', limit: '1' }
-          );
-          const talks = talksData?._embedded?.talks || [];
+    for (const conv of (convsNeedMsgs || [])) {
+      try {
+        // Fetch events for this lead filtered by chat message types
+        const eventsUrl = new URL(`https://${config.subdomain}.kommo.com/api/v4/events`);
+        eventsUrl.searchParams.set('filter[entity]', 'lead');
+        eventsUrl.searchParams.set('filter[entity_id]', conv.kommo_id);
+        eventsUrl.searchParams.append('filter[type][]', 'incoming_chat_message');
+        eventsUrl.searchParams.append('filter[type][]', 'outgoing_chat_message');
+        eventsUrl.searchParams.set('limit', '100');
 
-          if (talks.length === 0) {
-            console.log(`No talk for lead ${conv.kommo_id}`);
-            await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
-            continue;
-          }
+        const eventsRes = await fetch(eventsUrl.toString(), {
+          headers: { Authorization: `Bearer ${config.access_token}` },
+        });
 
-          const talk = talks[0];
-          const chatId = talk.chat_id;
-          if (!chatId) {
-            console.log(`No chat_id in talk ${talk.talk_id}`);
-            await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
-            continue;
-          }
+        if (!eventsRes.ok) {
+          const body = (await eventsRes.text()).substring(0, 300);
+          throw new Error(`Events ${eventsRes.status}: ${body}`);
+        }
 
-          // Step 2: Fetch chat history via amojo with HMAC auth
-          const chatHistory = await fetchAmojo(config.scope_id, config.secret_key, chatId);
-          
-          if (totalMessages === 0) {
-            console.log('Amojo response sample:', JSON.stringify(chatHistory).substring(0, 1500));
-          }
+        const eventsText = await eventsRes.text();
+        if (!eventsText || eventsText.trim() === '') {
+          console.log(`No events for lead ${conv.kommo_id}`);
+          await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
+          continue;
+        }
 
-          const messages = chatHistory?.messages || [];
-          if (messages.length === 0) {
-            console.log(`No messages for chat ${chatId}`);
-            await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
-            continue;
-          }
+        const eventsData = JSON.parse(eventsText);
+        const events = eventsData?._embedded?.events || [];
 
-          console.log(`Chat ${chatId}: ${messages.length} messages`);
+        // Log first event structure for debugging
+        if (events.length > 0 && totalMessages === 0) {
+          console.log('Event sample:', JSON.stringify(events[0]).substring(0, 1500));
+        }
 
-          // Step 3: Parse and save messages
-          const sdrName = kommoUserToName[String(conv.responsible_user_id)] || 'SDR';
-          const msgUpserts = [];
-          let prevSentAt: number | null = null;
+        if (events.length === 0) {
+          console.log(`0 events for lead ${conv.kommo_id}`);
+          await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
+          continue;
+        }
 
-          for (const msg of messages) {
-            const text = msg.message?.text || msg.text || '';
-            if (!text.trim()) continue;
+        // Parse events into messages
+        const sdrName = kommoUserToName[String(conv.responsible_user_id)] || 'SDR';
+        const msgUpserts = [];
+        let prevSentAt: number | null = null;
 
-            const sentAt = msg.created_at || msg.timestamp;
-            const isOutgoing = msg.author?.type === 'user' || msg.type === 'outgoing';
-            const senderType = isOutgoing ? 'sdr' : 'lead';
-            const senderName = isOutgoing ? sdrName : (msg.author?.name || conv.lead_name || 'Lead');
+        for (const evt of events) {
+          const isOutgoing = evt.type === 'outgoing_chat_message';
+          const senderType = isOutgoing ? 'sdr' : 'lead';
 
-            let responseTime: number | null = null;
-            if (prevSentAt && senderType === 'sdr') {
-              responseTime = sentAt - prevSentAt;
-              if (responseTime < 0 || responseTime > 86400) responseTime = null;
+          // Extract message text from value_after
+          const valueAfter = evt.value_after || [];
+          let text = '';
+          let msgTimestamp = evt.created_at;
+
+          for (const va of valueAfter) {
+            if (va.message) {
+              text = va.message.text || va.message.media || '';
+              if (va.message.timestamp) msgTimestamp = va.message.timestamp;
+              break;
             }
-            prevSentAt = sentAt;
-
-            msgUpserts.push({
-              conversation_id: conv.id,
-              kommo_message_id: msg.id || msg.message_id || `${chatId}-${sentAt}`,
-              sender_type: senderType,
-              sender_name: senderName,
-              content: text,
-              sent_at: new Date(sentAt * 1000).toISOString(),
-              response_time_seconds: responseTime,
-            });
+            // Some events have the text directly
+            if (va.text) {
+              text = va.text;
+              break;
+            }
           }
 
-          if (msgUpserts.length > 0) {
-            await supabase.from('kommo_messages').upsert(msgUpserts, { onConflict: 'kommo_message_id' });
-            
-            // Calculate avg response time
-            const responseTimes = msgUpserts.filter(m => m.response_time_seconds != null).map(m => m.response_time_seconds!);
-            const avgResponseTime = responseTimes.length > 0
-              ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
-              : null;
+          if (!text.trim()) continue;
 
-            await supabase.from('kommo_conversations').update({
-              messages_count: msgUpserts.length,
-              avg_response_time_seconds: avgResponseTime,
-            }).eq('id', conv.id);
+          const senderName = isOutgoing ? sdrName : (conv.lead_name || 'Lead');
 
-            totalMessages += msgUpserts.length;
-            console.log(`Saved ${msgUpserts.length} messages for lead ${conv.kommo_id}`);
+          let responseTime: number | null = null;
+          if (prevSentAt && senderType === 'sdr') {
+            responseTime = msgTimestamp - prevSentAt;
+            if (responseTime < 0 || responseTime > 86400) responseTime = null;
           }
-        } catch (e: any) {
-          console.error(`Error processing lead ${conv.kommo_id}: ${e.message.substring(0, 200)}`);
+          prevSentAt = msgTimestamp;
+
+          msgUpserts.push({
+            conversation_id: conv.id,
+            kommo_message_id: String(evt.id),
+            sender_type: senderType,
+            sender_name: senderName,
+            content: text,
+            sent_at: new Date(msgTimestamp * 1000).toISOString(),
+            response_time_seconds: responseTime,
+          });
+        }
+
+        if (msgUpserts.length > 0) {
+          await supabase.from('kommo_messages').upsert(msgUpserts, { onConflict: 'kommo_message_id' });
+
+          const responseTimes = msgUpserts.filter(m => m.response_time_seconds != null).map(m => m.response_time_seconds!);
+          const avgResponseTime = responseTimes.length > 0
+            ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
+            : null;
+
+          await supabase.from('kommo_conversations').update({
+            messages_count: msgUpserts.length,
+            avg_response_time_seconds: avgResponseTime,
+          }).eq('id', conv.id);
+
+          totalMessages += msgUpserts.length;
+          console.log(`✅ ${msgUpserts.length} msgs for lead ${conv.kommo_id} (${conv.lead_name})`);
+        } else {
+          console.log(`Events found but no text for lead ${conv.kommo_id}`);
           await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
         }
+      } catch (e: any) {
+        console.error(`Error lead ${conv.kommo_id}: ${e.message.substring(0, 200)}`);
+        await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
       }
-    } else {
-      if (!config.secret_key) console.log('⚠️ secret_key not configured - cannot fetch chat messages. Set it in kommo_config.');
-      if (!config.scope_id) console.log('⚠️ scope_id not configured.');
     }
 
     // Save state
