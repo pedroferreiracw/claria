@@ -54,6 +54,7 @@ const App = () => (
                 <Route path="/pipedrive" element={<ProtectedRoute><PipedrivePage /></ProtectedRoute>} />
                 <Route path="/meetime" element={<ProtectedRoute><MeetimePage /></ProtectedRoute>} />
                 <Route path="/kommo" element={<ProtectedRoute><KommoPage /></ProtectedRoute>} />
+                <Route path="/intelligence" element={<ProtectedRoute><IntelligencePage /></ProtectedRoute>} />
                 <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
