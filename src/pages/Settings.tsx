@@ -18,8 +18,12 @@ import {
   Moon,
   Loader2,
   Save,
-  Shield
+  Shield,
+  Plug,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
+import { useKommoConfig, useSaveKommoConfig } from '@/hooks/useKommo';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
