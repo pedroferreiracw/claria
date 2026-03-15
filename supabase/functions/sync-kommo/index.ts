@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     }
 
     const config = configs[0] as KommoConfig;
-    const accessToken = await refreshTokenIfNeeded(config, supabase);
+    const accessToken = getAccessToken(config);
 
     // Parse request body for optional filters
     let filters: { page?: number; limit?: number } = {};
