@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const MAX_TALK_PAGES = 10;
-const MAX_EVENT_PAGES = 5;
+const MAX_TALK_PAGES = 5;
+const MAX_EVENT_PAGES = 10;
 const USERS_CACHE_HOURS = 24;
 
 async function fetchKommo(subdomain: string, token: string, endpoint: string, params: Record<string, string> = {}) {
@@ -86,11 +86,9 @@ Deno.serve(async (req) => {
       const kommoUsers = usersData?._embedded?.users || [];
       console.log(`Fetched ${kommoUsers.length} Kommo users`);
 
-      // Get local SDRs
       const { data: localSdrs } = await supabase.from('sdrs').select('id, name').eq('team_type', 'SDR');
       const sdrList = localSdrs || [];
 
-      // Step 1: Find which group_id has the most SDR name matches → that's pre-sales
       const groupMatchCount = new Map<number, number>();
       const groupUsers = new Map<number, any[]>();
 
@@ -112,7 +110,6 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Pick the group with most matches
       let bestGroupId = 0;
       let bestCount = 0;
       for (const [gid, count] of groupMatchCount) {
@@ -120,13 +117,10 @@ Deno.serve(async (req) => {
       }
 
       console.log(`Pre-sales group detected: ${bestGroupId} (${bestCount} SDR matches)`);
-      console.log(`All groups: ${Array.from(groupMatchCount.entries()).map(([g, c]) => `${g}=${c}`).join(', ')}`);
 
-      // Step 2: Use ALL users in that group (not just matched ones)
       const presalesGroup = groupUsers.get(bestGroupId) || [];
       console.log(`Pre-sales group has ${presalesGroup.length} users: ${presalesGroup.map((u: any) => u.name).join(', ')}`);
 
-      // Step 3: Match each pre-sales user to an SDR (or auto-create)
       for (const ku of presalesGroup) {
         const kuNameLower = (ku.name || '').toLowerCase();
         const kuFirst = kuNameLower.split(' ')[0];
@@ -142,14 +136,9 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Auto-create SDR if not found
         if (!matchedSdrId) {
-          console.log(`Auto-creating SDR for: ${ku.name}`);
           const { data: newSdr } = await supabase.from('sdrs').insert({
-            name: ku.name,
-            role: 'SDR',
-            squad: 'Águia', // Default squad
-            team_type: 'SDR',
+            name: ku.name, role: 'SDR', squad: 'Águia', team_type: 'SDR',
           }).select('id').single();
           if (newSdr) {
             matchedSdrId = newSdr.id;
@@ -160,17 +149,13 @@ Deno.serve(async (req) => {
         presalesUserIds.push(ku.id);
         if (matchedSdrId) kommoUserToSdr[String(ku.id)] = matchedSdrId;
         kommoUserToName[String(ku.id)] = ku.name;
-        console.log(`  ${ku.name} (Kommo ${ku.id}) → SDR ${matchedSdrId || 'NONE'}`);
       }
 
-      // Cache
       await supabase.from('app_settings').upsert({
         setting_key: 'kommo_presales_users',
         setting_value: {
-          userIds: presalesUserIds,
-          userToSdr: kommoUserToSdr,
-          nameMap: kommoUserToName,
-          groupId: bestGroupId,
+          userIds: presalesUserIds, userToSdr: kommoUserToSdr,
+          nameMap: kommoUserToName, groupId: bestGroupId,
           refreshedAt: new Date().toISOString(),
         },
         updated_at: new Date().toISOString(),
@@ -191,9 +176,9 @@ Deno.serve(async (req) => {
       .eq('setting_key', 'kommo_sync_state').maybeSingle();
 
     let state = (syncStateSetting?.setting_value as any) || {};
-    let phase = state.phase || 'talks';
     let talkPage = state.talkPage || 1;
     let eventPage = state.eventPage || 1;
+    let talksComplete = state.talksComplete || false;
 
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const fromUnix = Math.floor(startOfMonth.getTime() / 1000);
@@ -202,9 +187,9 @@ Deno.serve(async (req) => {
     let totalMessages = 0;
 
     // ══════════════════════════════════════════════════════════
-    // PHASE B: Sync talks (filtered by pre-sales users)
+    // STEP 1: Sync talks (limited pages per run, continues across runs)
     // ══════════════════════════════════════════════════════════
-    if (phase === 'talks') {
+    if (!talksComplete) {
       let hasMore = true;
       let pages = 0;
 
@@ -250,30 +235,31 @@ Deno.serve(async (req) => {
       }
 
       if (!hasMore) {
-        phase = 'events';
+        talksComplete = true;
         talkPage = 1;
-        eventPage = 1;
-        console.log('Talks phase complete → events');
+        console.log('All talks synced!');
+      } else {
+        console.log(`Talks progress: page ${talkPage} next run`);
       }
     }
 
     // ══════════════════════════════════════════════════════════
-    // PHASE C: Sync messages via Events API
+    // STEP 2: ALWAYS sync messages via Events API (runs every invocation)
     // ══════════════════════════════════════════════════════════
-    if (phase === 'events') {
-      // Build contact_id → conversation mapping
-      const { data: convs } = await supabase
-        .from('kommo_conversations')
-        .select('id, kommo_contact_id, sdr_id')
-        .not('kommo_contact_id', 'is', null)
-        .limit(5000);
+    // Build contact_id → conversation mapping
+    const { data: convs } = await supabase
+      .from('kommo_conversations')
+      .select('id, kommo_contact_id, sdr_id')
+      .not('kommo_contact_id', 'is', null)
+      .limit(5000);
 
-      const contactMap = new Map<string, { id: string; sdr_id: string | null }>();
-      for (const c of (convs || [])) {
-        if (c.kommo_contact_id) contactMap.set(c.kommo_contact_id, { id: c.id, sdr_id: c.sdr_id });
-      }
-      console.log(`Contact→Conv map: ${contactMap.size} entries`);
+    const contactMap = new Map<string, { id: string; sdr_id: string | null }>();
+    for (const c of (convs || [])) {
+      if (c.kommo_contact_id) contactMap.set(c.kommo_contact_id, { id: c.id, sdr_id: c.sdr_id });
+    }
+    console.log(`Contact→Conv map: ${contactMap.size} entries`);
 
+    if (contactMap.size > 0) {
       let hasMore = true;
       let pages = 0;
 
@@ -292,20 +278,23 @@ Deno.serve(async (req) => {
           const events = data?._embedded?.events || [];
           if (!events.length) { hasMore = false; break; }
 
-          // Log first event structure for debugging
-          if (pages === 0 && events.length > 0) {
-            console.log('Sample event structure:', JSON.stringify(events[0]).substring(0, 500));
+          // Log first event for debugging
+          if (pages === 0) {
+            console.log('Sample event:', JSON.stringify(events[0]).substring(0, 600));
           }
 
           console.log(`Events page ${eventPage}: ${events.length} events`);
 
           const msgs: any[] = [];
+          let matched = 0, unmatched = 0;
+
           for (const evt of events) {
             const contactId = String(evt.entity_id || '');
             const conv = contactMap.get(contactId);
-            if (!conv) continue;
+            if (!conv) { unmatched++; continue; }
+            matched++;
 
-            // Extract message text - try multiple known structures
+            // Extract message text from various Kommo event structures
             let text = '';
             const va = evt.value_after;
             if (Array.isArray(va)) {
@@ -335,13 +324,14 @@ Deno.serve(async (req) => {
             });
           }
 
+          console.log(`  Events: ${matched} matched, ${unmatched} unmatched, ${msgs.length} with text`);
+
           if (msgs.length > 0) {
             const { error } = await supabase
               .from('kommo_messages')
               .upsert(msgs, { onConflict: 'kommo_message_id' });
             if (error) console.error('Message upsert error:', error);
             totalMessages += msgs.length;
-            console.log(`  → ${msgs.length} messages saved`);
           }
 
           hasMore = events.length >= 100;
@@ -354,36 +344,34 @@ Deno.serve(async (req) => {
       }
 
       if (!hasMore) {
-        phase = 'enrich';
         eventPage = 1;
-        console.log('Events phase complete → enrich');
+        console.log('Events cycle complete, will restart next run');
       }
+    } else {
+      console.log('No conversations with contact IDs yet, skipping events');
     }
 
     // ══════════════════════════════════════════════════════════
-    // PHASE D: Enrich (contact names, message counts, response times)
+    // STEP 3: Quick enrichment (message counts + response times)
     // ══════════════════════════════════════════════════════════
-    if (phase === 'enrich') {
-      // Get conversations that need enrichment
-      const { data: convsToEnrich } = await supabase
+    if (totalMessages > 0) {
+      // Update message counts for conversations that got new messages
+      const { data: convsToUpdate } = await supabase
         .from('kommo_conversations')
-        .select('id, kommo_contact_id, lead_name')
-        .or('lead_name.like.Conversa #%,messages_count.eq.0')
-        .limit(200);
+        .select('id')
+        .or('messages_count.eq.0,messages_count.is.null')
+        .limit(50);
 
-      let enriched = 0;
-      for (const conv of (convsToEnrich || [])) {
-        const updates: any = {};
-
-        // Count messages
+      for (const conv of (convsToUpdate || [])) {
         const { count } = await supabase
           .from('kommo_messages')
           .select('*', { count: 'exact', head: true })
           .eq('conversation_id', conv.id);
-        updates.messages_count = count || 0;
 
-        // Calculate avg response time
-        if ((count || 0) > 1) {
+        if ((count || 0) > 0) {
+          const updates: any = { messages_count: count };
+
+          // Calculate avg response time
           const { data: msgs } = await supabase
             .from('kommo_messages')
             .select('sender_type, sent_at')
@@ -401,50 +389,54 @@ Deno.serve(async (req) => {
             }
             if (responseN > 0) updates.avg_response_time_seconds = Math.round(totalTime / responseN);
           }
-        }
 
-        // Enrich contact name
-        if (conv.lead_name?.startsWith('Conversa #') && conv.kommo_contact_id && enriched < 30) {
-          try {
-            const contact = await fetchKommo(config.subdomain, config.access_token, `/api/v4/contacts/${conv.kommo_contact_id}`);
-            if (contact?.name) {
-              updates.lead_name = contact.name;
-              const pf = contact.custom_fields_values?.find((f: any) => f.field_code === 'PHONE');
-              if (pf?.values?.[0]?.value) updates.lead_phone = pf.values[0].value;
-              const ef = contact.custom_fields_values?.find((f: any) => f.field_code === 'EMAIL');
-              if (ef?.values?.[0]?.value) updates.lead_email = ef.values[0].value;
-              enriched++;
-            }
-          } catch (_) { /* skip */ }
+          await supabase.from('kommo_conversations').update(updates).eq('id', conv.id);
         }
-
-        await supabase.from('kommo_conversations').update(updates).eq('id', conv.id);
       }
+    }
 
-      console.log(`Enrichment: ${enriched} contacts named, ${(convsToEnrich || []).length} msg counts updated`);
+    // ══════════════════════════════════════════════════════════
+    // STEP 4: Enrich contact names (batch of 20 per run)
+    // ══════════════════════════════════════════════════════════
+    const { data: unnamed } = await supabase
+      .from('kommo_conversations')
+      .select('id, kommo_contact_id')
+      .like('lead_name', 'Conversa #%')
+      .not('kommo_contact_id', 'is', null)
+      .limit(20);
 
-      // Reset to talks for next cycle
-      phase = 'talks';
-      talkPage = 1;
-      eventPage = 1;
+    let enriched = 0;
+    for (const conv of (unnamed || [])) {
+      try {
+        const contact = await fetchKommo(config.subdomain, config.access_token, `/api/v4/contacts/${conv.kommo_contact_id}`);
+        if (contact?.name) {
+          const updates: any = { lead_name: contact.name };
+          const pf = contact.custom_fields_values?.find((f: any) => f.field_code === 'PHONE');
+          if (pf?.values?.[0]?.value) updates.lead_phone = pf.values[0].value;
+          const ef = contact.custom_fields_values?.find((f: any) => f.field_code === 'EMAIL');
+          if (ef?.values?.[0]?.value) updates.lead_email = ef.values[0].value;
+          await supabase.from('kommo_conversations').update(updates).eq('id', conv.id);
+          enriched++;
+        }
+      } catch (_) { /* skip */ }
     }
 
     // Save state
     await supabase.from('app_settings').upsert({
       setting_key: 'kommo_sync_state',
-      setting_value: { phase, talkPage, eventPage },
+      setting_value: { talkPage, eventPage, talksComplete },
       updated_at: new Date().toISOString(),
     }, { onConflict: 'setting_key' });
 
     await supabase.from('kommo_config').update({ last_sync_at: new Date().toISOString() }).eq('id', config.id);
 
-    console.log(`Done: phase=${phase}, talks=${totalSynced}, msgs=${totalMessages}, users=${presalesUserIds.length}`);
+    console.log(`Done: talks=${totalSynced}, msgs=${totalMessages}, enriched=${enriched}, users=${presalesUserIds.length}`);
 
     return resp({
       success: true,
-      phase,
       talks_synced: totalSynced,
       messages_synced: totalMessages,
+      contacts_enriched: enriched,
       presales_users: presalesUserIds.length,
     });
   } catch (error: any) {
