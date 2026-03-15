@@ -138,6 +138,8 @@ export function useSaveKommoConfig() {
       
       const configData = {
         subdomain: config.subdomain,
+        integration_id: config.integration_id,
+        secret_key: config.secret_key,
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
         token_expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
