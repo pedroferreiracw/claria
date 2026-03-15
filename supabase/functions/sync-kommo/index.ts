@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { crypto } from 'https://deno.land/std@0.208.0/crypto/mod.ts';
+import { encode as encodeHex } from 'https://deno.land/std@0.208.0/encoding/hex.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -6,7 +8,7 @@ const corsHeaders = {
 };
 
 const MAX_LEAD_PAGES = 3;
-const MAX_MSG_TALKS = 10;
+const MAX_MSG_CONVS = 5;
 const USERS_CACHE_HOURS = 24;
 
 async function fetchKommo(subdomain: string, token: string, endpoint: string, params: Record<string, string> = {}) {
@@ -40,6 +42,40 @@ function fetchKommoWithArrayFilters(
     });
 }
 
+// HMAC-SHA1 signing for amojo API
+async function signAmojo(secretKey: string, method: string, path: string, contentType: string = ''): Promise<{ date: string; signature: string }> {
+  const date = new Date().toUTCString();
+  const checkString = [method.toUpperCase(), contentType, date, path].join('\n');
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', encoder.encode(secretKey), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(checkString));
+  const signature = new TextDecoder().decode(encodeHex(new Uint8Array(sig)));
+  return { date, signature };
+}
+
+async function fetchAmojo(scopeId: string, secretKey: string, chatId: string, offset: number = 0) {
+  const path = `/v2/origin/custom/${scopeId}/chats/${chatId}/history`;
+  const fullPath = offset > 0 ? `${path}?offset=${offset}` : path;
+  const { date, signature } = await signAmojo(secretKey, 'GET', path);
+  const url = `https://amojo.kommo.com${fullPath}`;
+  const res = await fetch(url, {
+    headers: {
+      'Date': date,
+      'X-Signature': signature,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!res.ok) {
+    const body = (await res.text()).substring(0, 300);
+    throw new Error(`Amojo ${res.status}: ${body}`);
+  }
+  const text = await res.text();
+  if (!text || text.trim() === '') return {};
+  return JSON.parse(text);
+}
+
 function resp(body: any, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -55,7 +91,7 @@ Deno.serve(async (req) => {
 
     const { data: configs } = await supabase
       .from('kommo_config')
-      .select('id, subdomain, access_token, scope_id')
+      .select('id, subdomain, access_token, scope_id, secret_key')
       .eq('is_connected', true).limit(1);
     if (!configs?.length) return resp({ error: 'Kommo not configured' }, 400);
     const config = configs[0];
@@ -68,10 +104,7 @@ Deno.serve(async (req) => {
         if (amojoId) {
           config.scope_id = amojoId;
           await supabase.from('kommo_config').update({ scope_id: amojoId }).eq('id', config.id);
-          console.log(`Auto-fetched scope_id (amojo_id): ${amojoId}`);
-        } else {
-          console.log('Account response:', JSON.stringify(accountData).substring(0, 500));
-          console.log('Warning: amojo_id not found in account data');
+          console.log(`Auto-fetched scope_id: ${amojoId}`);
         }
       } catch (e: any) {
         console.error('Error fetching amojo_id:', e.message);
@@ -171,7 +204,7 @@ Deno.serve(async (req) => {
     let totalMessages = 0;
 
     // ══════════════════════════════════════════════════════════
-    // STEP 1: Sync leads + find associated talks
+    // PHASE B: Sync leads
     // ══════════════════════════════════════════════════════════
     let hasMore = true;
     let pages = 0;
@@ -222,93 +255,115 @@ Deno.serve(async (req) => {
     console.log(`Leads synced: ${totalSynced}`);
 
     // ══════════════════════════════════════════════════════════
-    // STEP 2: For each lead, find its talk_id via events, then
-    // fetch talk detail to get the chat_id for amojo
+    // PHASE C: Fetch messages via amojo chat history (HMAC auth)
     // ══════════════════════════════════════════════════════════
-    const { data: convsNeedMsgs } = await supabase
-      .from('kommo_conversations')
-      .select('id, kommo_id, sdr_id, responsible_user_id')
-      .not('sdr_id', 'is', null)
-      .or('messages_count.eq.0,messages_count.is.null')
-      .order('started_at', { ascending: true })
-      .limit(MAX_MSG_TALKS);
+    if (config.scope_id && config.secret_key) {
+      const { data: convsNeedMsgs } = await supabase
+        .from('kommo_conversations')
+        .select('id, kommo_id, sdr_id, kommo_contact_id, responsible_user_id')
+        .not('sdr_id', 'is', null)
+        .or('messages_count.eq.0,messages_count.is.null')
+        .order('started_at', { ascending: false })
+        .limit(MAX_MSG_CONVS);
 
-    console.log(`Conversations needing messages: ${(convsNeedMsgs || []).length}`);
+      console.log(`Conversations needing messages: ${(convsNeedMsgs || []).length}`);
 
-    for (const conv of (convsNeedMsgs || [])) {
-      try {
-        // Step 2a: Get the talk detail for this lead
-        // First, try to find the talk via the talks list filtered by this entity
-        const talksData = await fetchKommo(
-          config.subdomain, config.access_token, '/api/v4/talks',
-          { 'filter[entity_id]': conv.kommo_id, 'filter[entity_type]': 'leads', limit: '1' }
-        );
+      for (const conv of (convsNeedMsgs || [])) {
+        try {
+          // Step 1: Find the talk to get chat_id (UUID)
+          const talksData = await fetchKommo(
+            config.subdomain, config.access_token, '/api/v4/talks',
+            { 'filter[entity_id]': conv.kommo_id, 'filter[entity_type]': 'leads', limit: '1' }
+          );
+          const talks = talksData?._embedded?.talks || [];
 
-        const talks = talksData?._embedded?.talks || [];
-        
-        if (talks.length > 0) {
+          if (talks.length === 0) {
+            console.log(`No talk for lead ${conv.kommo_id}`);
+            await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
+            continue;
+          }
+
           const talk = talks[0];
+          const chatId = talk.chat_id;
+          if (!chatId) {
+            console.log(`No chat_id in talk ${talk.talk_id}`);
+            await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
+            continue;
+          }
+
+          // Step 2: Fetch chat history via amojo with HMAC auth
+          const chatHistory = await fetchAmojo(config.scope_id, config.secret_key, chatId);
           
-          // Log the full talk structure for the first one
           if (totalMessages === 0) {
-            console.log('Talk structure:', JSON.stringify(talk).substring(0, 1000));
+            console.log('Amojo response sample:', JSON.stringify(chatHistory).substring(0, 1500));
           }
 
-          // The talk may have a chat_id in _embedded or directly
-          const chatId = talk.chat_id || talk._embedded?.chat?.id || talk.id;
-          
-          // Step 2b: Try fetching messages from the talk's messages endpoint
-          // Kommo has /api/v4/talks/{id} which may include message data
-          try {
-            const talkDetail = await fetchKommo(
-              config.subdomain, config.access_token, `/api/v4/talks/${talk.id}`,
-              { with: 'messages' }
-            );
+          const messages = chatHistory?.messages || [];
+          if (messages.length === 0) {
+            console.log(`No messages for chat ${chatId}`);
+            await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
+            continue;
+          }
+
+          console.log(`Chat ${chatId}: ${messages.length} messages`);
+
+          // Step 3: Parse and save messages
+          const sdrName = kommoUserToName[String(conv.responsible_user_id)] || 'SDR';
+          const msgUpserts = [];
+          let prevSentAt: number | null = null;
+
+          for (const msg of messages) {
+            const text = msg.message?.text || msg.text || '';
+            if (!text.trim()) continue;
+
+            const sentAt = msg.created_at || msg.timestamp;
+            const isOutgoing = msg.author?.type === 'user' || msg.type === 'outgoing';
+            const senderType = isOutgoing ? 'sdr' : 'lead';
+            const senderName = isOutgoing ? sdrName : (msg.author?.name || conv.lead_name || 'Lead');
+
+            let responseTime: number | null = null;
+            if (prevSentAt && senderType === 'sdr') {
+              responseTime = sentAt - prevSentAt;
+              if (responseTime < 0 || responseTime > 86400) responseTime = null;
+            }
+            prevSentAt = sentAt;
+
+            msgUpserts.push({
+              conversation_id: conv.id,
+              kommo_message_id: msg.id || msg.message_id || `${chatId}-${sentAt}`,
+              sender_type: senderType,
+              sender_name: senderName,
+              content: text,
+              sent_at: new Date(sentAt * 1000).toISOString(),
+              response_time_seconds: responseTime,
+            });
+          }
+
+          if (msgUpserts.length > 0) {
+            await supabase.from('kommo_messages').upsert(msgUpserts, { onConflict: 'kommo_message_id' });
             
-            if (totalMessages === 0) {
-              console.log('Talk detail:', JSON.stringify(talkDetail).substring(0, 1000));
-            }
-          } catch (e: any) {
-            console.log(`Talk detail error: ${e.message.substring(0, 200)}`);
-          }
+            // Calculate avg response time
+            const responseTimes = msgUpserts.filter(m => m.response_time_seconds != null).map(m => m.response_time_seconds!);
+            const avgResponseTime = responseTimes.length > 0
+              ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
+              : null;
 
-          // Step 2c: Try the amojo chat history API
-          if (config.scope_id) {
-            try {
-              // Try with talk.id as chat_id
-              const chatHistory = await fetchAmojo(config.scope_id, config.access_token, String(chatId));
-              console.log('Amojo response:', JSON.stringify(chatHistory).substring(0, 1000));
-              
-              // Parse messages from amojo response
-              const amojoMsgs = chatHistory?.messages || chatHistory?._embedded?.messages || [];
-              if (amojoMsgs.length > 0) {
-                console.log('Got amojo messages:', amojoMsgs.length);
-              }
-            } catch (e: any) {
-              console.log(`Amojo error (chatId=${chatId}): ${e.message.substring(0, 200)}`);
-              
-              // Try with contact_id
-              if (conv.kommo_contact_id) {
-                try {
-                  const chatHistory2 = await fetchAmojo(config.scope_id, config.access_token, conv.kommo_contact_id);
-                  console.log('Amojo (contact) response:', JSON.stringify(chatHistory2).substring(0, 500));
-                } catch (e2: any) {
-                  console.log(`Amojo contact error: ${e2.message.substring(0, 200)}`);
-                }
-              }
-            }
+            await supabase.from('kommo_conversations').update({
+              messages_count: msgUpserts.length,
+              avg_response_time_seconds: avgResponseTime,
+            }).eq('id', conv.id);
+
+            totalMessages += msgUpserts.length;
+            console.log(`Saved ${msgUpserts.length} messages for lead ${conv.kommo_id}`);
           }
-        } else {
-          console.log(`No talk found for lead ${conv.kommo_id}`);
+        } catch (e: any) {
+          console.error(`Error processing lead ${conv.kommo_id}: ${e.message.substring(0, 200)}`);
+          await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
         }
-
-        // Mark as processed even if no messages to avoid re-processing
-        // Set messages_count to -1 to indicate "checked, no messages"
-        await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
-      } catch (e: any) {
-        console.error(`Error processing lead ${conv.kommo_id}: ${e.message}`);
-        await supabase.from('kommo_conversations').update({ messages_count: -1 }).eq('id', conv.id);
       }
+    } else {
+      if (!config.secret_key) console.log('⚠️ secret_key not configured - cannot fetch chat messages. Set it in kommo_config.');
+      if (!config.scope_id) console.log('⚠️ scope_id not configured.');
     }
 
     // Save state
@@ -326,15 +381,3 @@ Deno.serve(async (req) => {
     return resp({ error: error.message }, 500);
   }
 });
-
-async function fetchAmojo(scopeId: string, token: string, chatId: string) {
-  const url = `https://amojo.kommo.com/v2/origin/custom/${scopeId}/chats/${chatId}/history`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) {
-    const body = (await res.text()).substring(0, 300);
-    throw new Error(`Amojo ${res.status}: ${body}`);
-  }
-  const text = await res.text();
-  if (!text || text.trim() === '') return {};
-  return JSON.parse(text);
-}
