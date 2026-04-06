@@ -47,11 +47,6 @@ const evaluationsSubmenu = [
   { label: 'Closers', path: '/closer-evaluations' },
 ];
 
-const integrationsSubmenu = [
-  { label: 'Pipedrive', path: '/pipedrive' },
-  { label: 'Meetime', path: '/meetime' },
-  { label: 'Kommo', path: '/kommo' },
-];
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
