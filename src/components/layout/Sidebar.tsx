@@ -66,7 +66,7 @@ export function Sidebar() {
   // Check if current path is in a submenu
   const isInColaboradores = colaboradoresSubmenu.some(item => location.pathname === item.path);
   const isInEvaluations = evaluationsSubmenu.some(item => location.pathname === item.path);
-  const isInIntegrations = integrationsSubmenu.some(item => location.pathname === item.path);
+  
 
   // Auto-expand if active route is inside
   const colaboradoresExpanded = colaboradoresOpen || isInColaboradores;
