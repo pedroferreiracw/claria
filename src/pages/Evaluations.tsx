@@ -47,12 +47,13 @@ import { ptBR } from 'date-fns/locale';
 const scoreLabels: Record<keyof Scores, string> = {
   abertura: 'Abertura',
   rapport: 'Rapport',
-  spin: 'Investigação SPIN',
-  bant: 'Investigação BANT',
+  bant: 'Aplicação do BANT',
   dores: 'Identificação de Dores',
   geracaoValor: 'Geração de Valor',
   conducaoAgendamento: 'Condução p/ Agendamento',
+  gatilhoCompromisso: 'Gatilho de Compromisso',
   contornoObjecoes: 'Contorno de Objeções',
+  comunicacaoOratoria: 'Comunicação e Oratória',
 };
 
 export default function EvaluationsPage() {
