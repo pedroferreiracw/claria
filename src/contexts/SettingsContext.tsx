@@ -36,8 +36,7 @@ interface MenuSettings {
   compare: boolean;
   bestPractices: boolean;
   gamification: boolean;
-  pipedrive: boolean;
-  meetime: boolean;
+  intelligence: boolean;
 }
 
 interface AppSettings {
