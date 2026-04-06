@@ -409,17 +409,11 @@ export default function SettingsPage() {
             </div>
           </TabsContent>
 
-          {/* Integrations Tab */}
-          <TabsContent value="integrations" className="space-y-6">
-            <KommoSettingsSection />
-          </TabsContent>
         </Tabs>
       </div>
     </MainLayout>
   );
 }
-
-function KommoSettingsSection() {
   const { data: config, isLoading } = useKommoConfig();
   const saveConfig = useSaveKommoConfig();
   const [subdomain, setSubdomain] = useState('');
