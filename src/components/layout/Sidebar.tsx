@@ -14,8 +14,6 @@ import {
   GitCompare,
   BookOpen,
   Trophy,
-  Plug,
-  Video,
   Brain
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -47,17 +45,12 @@ const evaluationsSubmenu = [
   { label: 'Closers', path: '/closer-evaluations' },
 ];
 
-const integrationsSubmenu = [
-  { label: 'Pipedrive', path: '/pipedrive' },
-  { label: 'Meetime', path: '/meetime' },
-  { label: 'Kommo', path: '/kommo' },
-];
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [colaboradoresOpen, setColaboradoresOpen] = useState(false);
   const [evaluationsOpen, setEvaluationsOpen] = useState(false);
-  const [integrationsOpen, setIntegrationsOpen] = useState(false);
+  
   const location = useLocation();
   const { user, signOut } = useAuth();
   const { settings } = useSettings();
@@ -71,12 +64,12 @@ export function Sidebar() {
   // Check if current path is in a submenu
   const isInColaboradores = colaboradoresSubmenu.some(item => location.pathname === item.path);
   const isInEvaluations = evaluationsSubmenu.some(item => location.pathname === item.path);
-  const isInIntegrations = integrationsSubmenu.some(item => location.pathname === item.path);
+  
 
   // Auto-expand if active route is inside
   const colaboradoresExpanded = colaboradoresOpen || isInColaboradores;
   const evaluationsExpanded = evaluationsOpen || isInEvaluations;
-  const integrationsExpanded = integrationsOpen || isInIntegrations;
+  
 
   // Filter menu items based on settings (show by default if not explicitly disabled)
   const menuItems = baseMenuItems.filter(item => {
@@ -244,50 +237,6 @@ export function Sidebar() {
             </Collapsible>
           )}
 
-          {/* Integrations Submenu */}
-          {(settings.menu.pipedrive !== false || settings.menu.meetime !== false) && (
-            <Collapsible open={!collapsed && integrationsExpanded} onOpenChange={setIntegrationsOpen}>
-              <CollapsibleTrigger asChild>
-                <button
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 w-full",
-                    isInIntegrations
-                      ? "gradient-accent text-accent-foreground shadow-lg shadow-accent/20" 
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <Plug className="h-5 w-5 shrink-0" />
-                  {!collapsed && (
-                    <>
-                      <span className="flex-1 text-left">Integrações</span>
-                      <ChevronDown className={cn("h-4 w-4 transition-transform", integrationsExpanded && "rotate-180")} />
-                    </>
-                  )}
-                </button>
-              </CollapsibleTrigger>
-              {!collapsed && (
-                <CollapsibleContent className="pl-8 space-y-1 mt-1">
-                  {integrationsSubmenu.map((subItem) => {
-                    const isSubActive = location.pathname === subItem.path;
-                    return (
-                      <NavLink
-                        key={subItem.path}
-                        to={subItem.path}
-                        className={cn(
-                          "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                          isSubActive
-                            ? "bg-primary/20 text-primary font-medium"
-                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                        )}
-                      >
-                        <span>{subItem.label}</span>
-                      </NavLink>
-                    );
-                  })}
-                </CollapsibleContent>
-              )}
-            </Collapsible>
-          )}
 
           {/* Admin Settings Link */}
           {isAdmin && (

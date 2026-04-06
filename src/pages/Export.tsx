@@ -19,12 +19,13 @@ export default function ExportPage() {
   const scoreLabels: Record<keyof Scores, string> = {
     abertura: 'Abertura',
     rapport: 'Rapport',
-    spin: 'SPIN',
     bant: 'BANT',
     dores: 'Dores',
     geracaoValor: 'Geração Valor',
     conducaoAgendamento: 'Condução',
+    gatilhoCompromisso: 'Compromisso',
     contornoObjecoes: 'Objeções',
+    comunicacaoOratoria: 'Comunicação',
   };
 
   const exportToCSV = (data: Record<string, unknown>[], filename: string) => {

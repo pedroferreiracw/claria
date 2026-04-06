@@ -55,12 +55,13 @@ export default function Dashboard() {
   const categoryAverages: Record<keyof Scores, number> = {
     abertura: 0,
     rapport: 0,
-    spin: 0,
     bant: 0,
     dores: 0,
     geracaoValor: 0,
     conducaoAgendamento: 0,
+    gatilhoCompromisso: 0,
     contornoObjecoes: 0,
+    comunicacaoOratoria: 0,
   };
 
   if (filteredEvaluations.length > 0) {
@@ -75,23 +76,25 @@ export default function Dashboard() {
   const categoryLabels: Record<keyof Scores, string> = {
     abertura: 'Abertura',
     rapport: 'Rapport',
-    spin: 'Investigação SPIN',
-    bant: 'Investigação BANT',
+    bant: 'Aplicação do BANT',
     dores: 'Identificação de Dores',
     geracaoValor: 'Geração de Valor',
     conducaoAgendamento: 'Condução p/ Agendamento',
+    gatilhoCompromisso: 'Gatilho de Compromisso',
     contornoObjecoes: 'Contorno de Objeções',
+    comunicacaoOratoria: 'Comunicação e Oratória',
   };
 
   const categoryDescriptions: Record<keyof Scores, string> = {
     abertura: 'Qualidade da abertura da conversa e apresentação inicial',
     rapport: 'Capacidade de criar conexão e empatia com o lead',
-    spin: 'Uso correto das perguntas de Situação, Problema, Implicação e Necessidade',
     bant: 'Identificação de Budget, Authority, Need e Timeline',
     dores: 'Capacidade de identificar e explorar as dores do cliente',
     geracaoValor: 'Apresentação de valor e benefícios da solução',
     conducaoAgendamento: 'Habilidade em conduzir para o agendamento da reunião',
+    gatilhoCompromisso: 'Uso de gatilhos para gerar comprometimento do lead',
     contornoObjecoes: 'Efetividade no tratamento de objeções',
+    comunicacaoOratoria: 'Clareza, tom de voz e habilidades de comunicação',
   };
 
   // Phase scores data for table

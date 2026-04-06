@@ -47,12 +47,13 @@ import { ptBR } from 'date-fns/locale';
 const scoreLabels: Record<keyof Scores, string> = {
   abertura: 'Abertura',
   rapport: 'Rapport',
-  spin: 'Investigação SPIN',
-  bant: 'Investigação BANT',
+  bant: 'Aplicação do BANT',
   dores: 'Identificação de Dores',
   geracaoValor: 'Geração de Valor',
   conducaoAgendamento: 'Condução p/ Agendamento',
+  gatilhoCompromisso: 'Gatilho de Compromisso',
   contornoObjecoes: 'Contorno de Objeções',
+  comunicacaoOratoria: 'Comunicação e Oratória',
 };
 
 export default function EvaluationsPage() {
@@ -138,7 +139,7 @@ export default function EvaluationsPage() {
   // Team average scores for radar
   const teamAverageScores = useMemo(() => {
     if (allEvaluations.length === 0) return undefined;
-    const keys: (keyof Scores)[] = ['abertura', 'rapport', 'spin', 'bant', 'dores', 'geracaoValor', 'conducaoAgendamento', 'contornoObjecoes'];
+    const keys: (keyof Scores)[] = ['abertura', 'rapport', 'bant', 'dores', 'geracaoValor', 'conducaoAgendamento', 'gatilhoCompromisso', 'contornoObjecoes', 'comunicacaoOratoria'];
     const avg: Partial<Scores> = {};
     keys.forEach(key => {
       avg[key] = Math.round(
@@ -857,11 +858,11 @@ export default function EvaluationsPage() {
                             </div>
                           </div>
                           <div className="space-y-2">
-                            <Label>Recomendações SPIN</Label>
+                            <Label>Recomendações de Comunicação</Label>
                             <ul className="text-sm space-y-1 p-3 rounded-lg bg-secondary/30">
-                              {viewingEvaluation.aiFeedback.recomendacoesSpin.map((r, i) => (
+                              {viewingEvaluation.aiFeedback.recomendacoesComunicacao?.map((r, i) => (
                                 <li key={i}>• {r}</li>
-                              ))}
+                              )) || <li className="text-muted-foreground">Nenhuma recomendação</li>}
                             </ul>
                           </div>
                           <div className="space-y-2">

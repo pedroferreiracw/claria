@@ -12,12 +12,13 @@ import { ptBR } from 'date-fns/locale';
 const SCORE_LABELS: Record<keyof Scores, string> = {
   abertura: 'Abertura',
   rapport: 'Rapport',
-  spin: 'SPIN',
   bant: 'BANT',
   dores: 'Dores',
   geracaoValor: 'Valor',
   conducaoAgendamento: 'Agendamento',
+  gatilhoCompromisso: 'Compromisso',
   contornoObjecoes: 'Objeções',
+  comunicacaoOratoria: 'Comunicação',
 };
 
 interface SDREvaluationCardProps {

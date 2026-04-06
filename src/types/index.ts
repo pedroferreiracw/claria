@@ -23,20 +23,21 @@ export interface Objection {
 export interface Scores {
   abertura: number;
   rapport: number;
-  spin: number;
   bant: number;
   dores: number;
   geracaoValor: number;
   conducaoAgendamento: number;
+  gatilhoCompromisso: number;
   contornoObjecoes: number;
+  comunicacaoOratoria: number;
 }
 
 export interface AIFeedback {
   pontosFortes: string[];
   pontosFracos: string[];
-  recomendacoesSpin: string[];
   recomendacoesBant: string[];
   recomendacoesProcesso: string[];
+  recomendacoesComunicacao: string[];
   analiseObjecoes: {
     objection: string;
     wasEffective: boolean;
@@ -89,13 +90,14 @@ export function getScoreBgColor(score: number): string {
 export function calculateFinalScore(scores: Scores): number {
   const weights = {
     abertura: 1,
-    rapport: 1.2,
-    spin: 1.5,
+    rapport: 1,
     bant: 1.5,
-    dores: 1.3,
-    geracaoValor: 1.3,
-    conducaoAgendamento: 1.4,
-    contornoObjecoes: 1.2,
+    dores: 1.5,
+    geracaoValor: 1,
+    conducaoAgendamento: 1.5,
+    gatilhoCompromisso: 1.5,
+    contornoObjecoes: 1.5,
+    comunicacaoOratoria: 1,
   };
   
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
