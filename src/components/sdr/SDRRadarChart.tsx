@@ -9,18 +9,19 @@ import {
   Legend,
   Tooltip,
 } from 'recharts';
-import { ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart';
+import { ChartConfig, ChartContainer } from '@/components/ui/chart';
 import { Scores } from '@/types';
 
 const SDR_SCORE_LABELS: Record<keyof Scores, string> = {
   abertura: 'Abertura',
   rapport: 'Rapport',
-  spin: 'SPIN',
   bant: 'BANT',
   dores: 'Dores',
   geracaoValor: 'Valor',
   conducaoAgendamento: 'Agendamento',
+  gatilhoCompromisso: 'Compromisso',
   contornoObjecoes: 'Objeções',
+  comunicacaoOratoria: 'Comunicação',
 };
 
 interface SDRRadarChartProps {
