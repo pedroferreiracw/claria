@@ -858,11 +858,11 @@ export default function EvaluationsPage() {
                             </div>
                           </div>
                           <div className="space-y-2">
-                            <Label>Recomendações SPIN</Label>
+                            <Label>Recomendações de Comunicação</Label>
                             <ul className="text-sm space-y-1 p-3 rounded-lg bg-secondary/30">
-                              {viewingEvaluation.aiFeedback.recomendacoesSpin.map((r, i) => (
+                              {viewingEvaluation.aiFeedback.recomendacoesComunicacao?.map((r, i) => (
                                 <li key={i}>• {r}</li>
-                              ))}
+                              )) || <li className="text-muted-foreground">Nenhuma recomendação</li>}
                             </ul>
                           </div>
                           <div className="space-y-2">

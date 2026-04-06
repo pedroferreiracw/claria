@@ -30,7 +30,7 @@ export default function SDRsPage() {
   const teamAverageScores = useMemo(() => {
     if (evaluations.length === 0) return undefined;
     
-    const scoreKeys: (keyof Scores)[] = ['abertura', 'rapport', 'spin', 'bant', 'dores', 'geracaoValor', 'conducaoAgendamento', 'contornoObjecoes'];
+    const scoreKeys: (keyof Scores)[] = ['abertura', 'rapport', 'bant', 'dores', 'geracaoValor', 'conducaoAgendamento', 'gatilhoCompromisso', 'contornoObjecoes', 'comunicacaoOratoria'];
     const avgScores: Partial<Scores> = {};
     
     scoreKeys.forEach(key => {
