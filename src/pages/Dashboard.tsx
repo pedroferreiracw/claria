@@ -55,12 +55,13 @@ export default function Dashboard() {
   const categoryAverages: Record<keyof Scores, number> = {
     abertura: 0,
     rapport: 0,
-    spin: 0,
     bant: 0,
     dores: 0,
     geracaoValor: 0,
     conducaoAgendamento: 0,
+    gatilhoCompromisso: 0,
     contornoObjecoes: 0,
+    comunicacaoOratoria: 0,
   };
 
   if (filteredEvaluations.length > 0) {
