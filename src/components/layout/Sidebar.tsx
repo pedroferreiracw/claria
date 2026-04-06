@@ -239,50 +239,6 @@ export function Sidebar() {
             </Collapsible>
           )}
 
-          {/* Integrations Submenu */}
-          {(settings.menu.pipedrive !== false || settings.menu.meetime !== false) && (
-            <Collapsible open={!collapsed && integrationsExpanded} onOpenChange={setIntegrationsOpen}>
-              <CollapsibleTrigger asChild>
-                <button
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 w-full",
-                    isInIntegrations
-                      ? "gradient-accent text-accent-foreground shadow-lg shadow-accent/20" 
-                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  <Plug className="h-5 w-5 shrink-0" />
-                  {!collapsed && (
-                    <>
-                      <span className="flex-1 text-left">Integrações</span>
-                      <ChevronDown className={cn("h-4 w-4 transition-transform", integrationsExpanded && "rotate-180")} />
-                    </>
-                  )}
-                </button>
-              </CollapsibleTrigger>
-              {!collapsed && (
-                <CollapsibleContent className="pl-8 space-y-1 mt-1">
-                  {integrationsSubmenu.map((subItem) => {
-                    const isSubActive = location.pathname === subItem.path;
-                    return (
-                      <NavLink
-                        key={subItem.path}
-                        to={subItem.path}
-                        className={cn(
-                          "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200",
-                          isSubActive
-                            ? "bg-primary/20 text-primary font-medium"
-                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                        )}
-                      >
-                        <span>{subItem.label}</span>
-                      </NavLink>
-                    );
-                  })}
-                </CollapsibleContent>
-              )}
-            </Collapsible>
-          )}
 
           {/* Admin Settings Link */}
           {isAdmin && (
