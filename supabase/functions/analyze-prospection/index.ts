@@ -6,10 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Maximum allowed conversation text length (50,000 characters ~25 pages)
 const MAX_CONVERSATION_LENGTH = 50000;
-
-// Allowed prospection types
 const ALLOWED_PROSPECTION_TYPES = ['WhatsApp', 'Ligação', 'Email', 'Reunião'];
 
 const systemPrompt = `Você é um especialista em análise de prospecções comerciais da Cardápio Web, empresa de soluções digitais para restaurantes.
@@ -19,17 +16,22 @@ Sua tarefa é analisar conversas de prospecção (ligação ou WhatsApp) e avali
 CONTEXTO DA EMPRESA:
 - Cardápio Web vende soluções digitais para restaurantes
 - O objetivo do SDR é agendar reuniões de demonstração
-- Metodologias utilizadas: SPIN Selling e BANT
+- Metodologia principal: BANT (Budget, Authority, Need, Timeline)
 
 CRITÉRIOS DE AVALIAÇÃO (0-100 cada):
 1. Abertura: Como o SDR iniciou a conversa, captou atenção e se apresentou
 2. Rapport: Construção de conexão e relacionamento com o lead
-3. Investigação SPIN: Uso de perguntas de Situação, Problema, Implicação e Necessidade de solução
-4. Investigação BANT: Qualificação de Budget, Authority, Need e Timeline
-5. Identificação de Dores: Capacidade de descobrir as dores reais do cliente
-6. Geração de Valor: Apresentação de benefícios e valor da solução
-7. Condução para Agendamento: Habilidade de conduzir para o próximo passo (reunião)
+3. Aplicação do BANT: Qualificação de Budget, Authority, Need e Timeline
+4. Identificação de Dores: Capacidade de descobrir as dores reais do cliente
+5. Geração de Valor: Apresentação de benefícios e valor da solução
+6. Condução para Agendamento: Habilidade de conduzir para o próximo passo (reunião)
+7. Gatilho de Compromisso: Uso de gatilhos para gerar comprometimento emocional e racional do lead
 8. Contorno de Objeções: Eficácia ao lidar com objeções do lead
+9. Comunicação e Oratória: Clareza, tom de voz, fluidez e habilidades de comunicação
+
+PESOS DOS CRITÉRIOS:
+- Peso maior (1.5x): BANT, Identificação de Dores, Condução para Agendamento, Gatilho de Compromisso, Contorno de Objeções
+- Peso normal (1.0x): Abertura, Rapport, Geração de Valor, Comunicação e Oratória
 
 REGRAS DE PONTUAÇÃO:
 - 0-59: Precisa melhorar significativamente
@@ -42,7 +44,7 @@ Analise a conversa e forneça:
 2. Respostas principais do lead
 3. Objeções levantadas (com a resposta do SDR e se foi efetiva)
 4. Resultado detectado (prosseguiu para reunião, recusou, ou perdeu interesse)
-5. Notas para cada um dos 8 critérios
+5. Notas para cada um dos 9 critérios
 6. Feedback detalhado com pontos fortes, pontos fracos e recomendações`;
 
 serve(async (req) => {
@@ -51,10 +53,8 @@ serve(async (req) => {
   }
 
   try {
-    // Authentication check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      console.error('Missing authorization header');
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -70,18 +70,14 @@ serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) {
-      console.error('Auth error:', authError?.message || 'No user found');
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log('Authenticated user:', user.id);
-
     const { conversationText, prospectionType } = await req.json();
 
-    // Input validation - check type
     if (!conversationText || typeof conversationText !== 'string') {
       return new Response(
         JSON.stringify({ error: "Texto da conversa é obrigatório" }),
@@ -89,7 +85,6 @@ serve(async (req) => {
       );
     }
 
-    // Input validation - check length
     if (conversationText.length > MAX_CONVERSATION_LENGTH) {
       return new Response(
         JSON.stringify({ error: `Texto da conversa muito longo (máximo ${MAX_CONVERSATION_LENGTH} caracteres)` }),
@@ -97,7 +92,6 @@ serve(async (req) => {
       );
     }
 
-    // Validate and sanitize prospectionType
     const sanitizedProspectionType = ALLOWED_PROSPECTION_TYPES.includes(prospectionType) 
       ? prospectionType 
       : 'WhatsApp';
@@ -170,14 +164,15 @@ Use a ferramenta analyze_prospection para retornar a análise estruturada.`;
                     properties: {
                       abertura: { type: "number", description: "Nota 0-100 para abertura da conversa" },
                       rapport: { type: "number", description: "Nota 0-100 para construção de rapport" },
-                      spin: { type: "number", description: "Nota 0-100 para investigação SPIN" },
-                      bant: { type: "number", description: "Nota 0-100 para qualificação BANT" },
+                      bant: { type: "number", description: "Nota 0-100 para aplicação do BANT" },
                       dores: { type: "number", description: "Nota 0-100 para identificação de dores" },
                       geracaoValor: { type: "number", description: "Nota 0-100 para geração de valor" },
                       conducaoAgendamento: { type: "number", description: "Nota 0-100 para condução ao agendamento" },
-                      contornoObjecoes: { type: "number", description: "Nota 0-100 para contorno de objeções" }
+                      gatilhoCompromisso: { type: "number", description: "Nota 0-100 para uso de gatilhos de compromisso" },
+                      contornoObjecoes: { type: "number", description: "Nota 0-100 para contorno de objeções" },
+                      comunicacaoOratoria: { type: "number", description: "Nota 0-100 para comunicação e oratória" }
                     },
-                    required: ["abertura", "rapport", "spin", "bant", "dores", "geracaoValor", "conducaoAgendamento", "contornoObjecoes"]
+                    required: ["abertura", "rapport", "bant", "dores", "geracaoValor", "conducaoAgendamento", "gatilhoCompromisso", "contornoObjecoes", "comunicacaoOratoria"]
                   },
                   aiFeedback: {
                     type: "object",
@@ -192,11 +187,6 @@ Use a ferramenta analyze_prospection para retornar a análise estruturada.`;
                         items: { type: "string" },
                         description: "Lista de pontos fracos a serem melhorados"
                       },
-                      recomendacoesSpin: {
-                        type: "array",
-                        items: { type: "string" },
-                        description: "Recomendações específicas para melhorar aplicação do SPIN Selling"
-                      },
                       recomendacoesBant: {
                         type: "array",
                         items: { type: "string" },
@@ -205,7 +195,12 @@ Use a ferramenta analyze_prospection para retornar a análise estruturada.`;
                       recomendacoesProcesso: {
                         type: "array",
                         items: { type: "string" },
-                        description: "Recomendações gerais para o processo de vendas da Cardápio Web"
+                        description: "Recomendações gerais para o processo de vendas"
+                      },
+                      recomendacoesComunicacao: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "Recomendações para melhorar comunicação e oratória"
                       },
                       analiseObjecoes: {
                         type: "array",
@@ -222,7 +217,7 @@ Use a ferramenta analyze_prospection para retornar a análise estruturada.`;
                         description: "Análise detalhada de cada objeção com sugestões de melhoria"
                       }
                     },
-                    required: ["pontosFortes", "pontosFracos", "recomendacoesSpin", "recomendacoesBant", "recomendacoesProcesso", "analiseObjecoes"]
+                    required: ["pontosFortes", "pontosFracos", "recomendacoesBant", "recomendacoesProcesso", "recomendacoesComunicacao", "analiseObjecoes"]
                   }
                 },
                 required: ["questionsAsked", "leadResponses", "objections", "result", "scores", "aiFeedback"]
@@ -247,14 +242,10 @@ Use a ferramenta analyze_prospection para retornar a análise estruturada.`;
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status);
       throw new Error(`AI gateway error: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log("AI response received successfully");
-
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall || toolCall.function.name !== "analyze_prospection") {
       throw new Error("Invalid AI response structure");
