@@ -414,7 +414,6 @@ export default function SettingsPage() {
     </MainLayout>
   );
 }
-  const { data: config, isLoading } = useKommoConfig();
   const saveConfig = useSaveKommoConfig();
   const [subdomain, setSubdomain] = useState('');
   const [longLivedToken, setLongLivedToken] = useState('');
