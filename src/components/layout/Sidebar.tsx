@@ -71,7 +71,7 @@ export function Sidebar() {
   // Auto-expand if active route is inside
   const colaboradoresExpanded = colaboradoresOpen || isInColaboradores;
   const evaluationsExpanded = evaluationsOpen || isInEvaluations;
-  const integrationsExpanded = integrationsOpen || isInIntegrations;
+  
 
   // Filter menu items based on settings (show by default if not explicitly disabled)
   const menuItems = baseMenuItems.filter(item => {
