@@ -52,7 +52,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [colaboradoresOpen, setColaboradoresOpen] = useState(false);
   const [evaluationsOpen, setEvaluationsOpen] = useState(false);
-  const [integrationsOpen, setIntegrationsOpen] = useState(false);
+  
   const location = useLocation();
   const { user, signOut } = useAuth();
   const { settings } = useSettings();
