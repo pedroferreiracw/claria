@@ -139,7 +139,7 @@ export default function EvaluationsPage() {
   // Team average scores for radar
   const teamAverageScores = useMemo(() => {
     if (allEvaluations.length === 0) return undefined;
-    const keys: (keyof Scores)[] = ['abertura', 'rapport', 'spin', 'bant', 'dores', 'geracaoValor', 'conducaoAgendamento', 'contornoObjecoes'];
+    const keys: (keyof Scores)[] = ['abertura', 'rapport', 'bant', 'dores', 'geracaoValor', 'conducaoAgendamento', 'gatilhoCompromisso', 'contornoObjecoes', 'comunicacaoOratoria'];
     const avg: Partial<Scores> = {};
     keys.forEach(key => {
       avg[key] = Math.round(
