@@ -1,4 +1,4 @@
-export type Squad = 'Águia' | 'Lobo';
+export type Squad = 'Águia' | 'Lobo' | 'Sharks' | 'Serpentes';
 
 export type ProspectionType = 'Ligação' | 'WhatsApp';
 
