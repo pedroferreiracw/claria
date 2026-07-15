@@ -449,6 +449,49 @@ export default function EvaluationsPage() {
                         </div>
                       )}
 
+                      {/* File Upload for WhatsApp */}
+                      {prospectionType === 'WhatsApp' && (
+                        <div className="space-y-2">
+                          <Label>Arquivo da Conversa (opcional)</Label>
+                          <input
+                            ref={whatsappFileInputRef}
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                            onChange={handleWhatsappFileChange}
+                            className="hidden"
+                          />
+                          {!whatsappFile ? (
+                            <div
+                              onClick={() => whatsappFileInputRef.current?.click()}
+                              className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-secondary/50 transition-colors"
+                            >
+                              <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                              <p className="text-sm font-medium">Clique para fazer upload</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                PDF, JPG, JPEG, PNG (máx 25MB)
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border border-border">
+                              <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                                {whatsappFile.type === 'application/pdf' ? (
+                                  <FileText className="h-5 w-5 text-primary" />
+                                ) : (
+                                  <FileImage className="h-5 w-5 text-primary" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{whatsappFile.name}</p>
+                                <p className="text-xs text-muted-foreground">{formatFileSize(whatsappFile.size)}</p>
+                              </div>
+                              <Button variant="ghost" size="icon" onClick={removeWhatsappFile} className="h-8 w-8">
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Text Input */}
                       <div className="space-y-2">
                         <Label>
@@ -456,13 +499,20 @@ export default function EvaluationsPage() {
                             ? 'Transcrição (opcional - será gerada automaticamente)'
                             : prospectionType === 'Ligação'
                             ? 'Transcrição (ou faça upload do áudio acima)'
+                            : prospectionType === 'WhatsApp' && whatsappFile
+                            ? 'Texto da conversa (opcional - o arquivo será analisado)'
+                            : prospectionType === 'WhatsApp'
+                            ? 'Conversa (ou faça upload do arquivo acima)'
                             : 'Conversa *'}
                         </Label>
                         <Textarea
                           value={conversationText}
                           onChange={(e) => {
                             setConversationText(e.target.value);
-                            if (e.target.value.trim()) setAudioFile(null);
+                            if (e.target.value.trim()) {
+                              setAudioFile(null);
+                              setWhatsappFile(null);
+                            }
                           }}
                           placeholder={
                             prospectionType === 'Ligação'
@@ -478,6 +528,7 @@ export default function EvaluationsPage() {
                       </div>
                     </div>
                   </ScrollArea>
+
 
                   {/* Fixed Footer */}
                   <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
