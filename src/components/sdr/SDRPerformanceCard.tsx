@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { TrendingUp, TrendingDown, Minus, Trophy, Medal, Award, Phone, MessageCircle } from 'lucide-react';
 import { SDR, Evaluation, getScoreColor, getScoreBgColor } from '@/types';
 import { cn } from '@/lib/utils';
+import { getSquadConfig } from '@/config/squads';
 
 interface SDRPerformanceCardProps {
   sdr: SDR;
