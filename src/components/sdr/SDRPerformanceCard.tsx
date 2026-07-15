@@ -126,12 +126,7 @@ export function SDRPerformanceCard({ sdr, evaluations, rank, onClick }: SDRPerfo
             <p className="text-xs text-muted-foreground">{sdr.role}</p>
             <Badge
               variant="outline"
-              className={cn(
-                'mt-1 text-xs',
-                sdr.squad === 'Águia'
-                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                  : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-              )}
+              className={cn('mt-1 text-xs', getSquadConfig(sdr.squad).badge)}
             >
               {sdr.squad}
             </Badge>
