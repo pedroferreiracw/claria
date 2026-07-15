@@ -537,7 +537,7 @@ export default function EvaluationsPage() {
                     </Button>
                     <Button
                       onClick={handleAnalyze}
-                      disabled={!sdrId || !prospectionType || (!conversationText.trim() && !audioFile) || isAnalyzing || isTranscribing}
+                      disabled={!sdrId || !prospectionType || (!conversationText.trim() && !audioFile && !whatsappFile) || isAnalyzing || isTranscribing}
                       className="min-w-[180px]"
                     >
                       {isTranscribing ? (
