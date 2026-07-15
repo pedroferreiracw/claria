@@ -149,8 +149,14 @@ export default function SDRsPage() {
                         <SelectValue placeholder="Selecione o squad" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Águia"><span className="flex items-center gap-2"><Bird className="h-4 w-4" /> Águia</span></SelectItem>
-                        <SelectItem value="Lobo"><span className="flex items-center gap-2"><Dog className="h-4 w-4" /> Lobo</span></SelectItem>
+                        {SQUADS.map((sq) => {
+                          const Icon = sq.icon;
+                          return (
+                            <SelectItem key={sq.name} value={sq.name}>
+                              <span className="flex items-center gap-2"><Icon className="h-4 w-4" /> {sq.name}</span>
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
