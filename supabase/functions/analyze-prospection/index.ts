@@ -76,20 +76,32 @@ serve(async (req) => {
       );
     }
 
-    const { conversationText, prospectionType } = await req.json();
+    const { conversationText, prospectionType, attachment } = await req.json();
 
-    if (!conversationText || typeof conversationText !== 'string') {
+    const hasAttachment = attachment && typeof attachment === 'object' && attachment.data && attachment.mimeType;
+
+    if ((!conversationText || typeof conversationText !== 'string') && !hasAttachment) {
       return new Response(
-        JSON.stringify({ error: "Texto da conversa é obrigatório" }),
+        JSON.stringify({ error: "Texto da conversa ou arquivo é obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (conversationText.length > MAX_CONVERSATION_LENGTH) {
+    if (conversationText && conversationText.length > MAX_CONVERSATION_LENGTH) {
       return new Response(
         JSON.stringify({ error: `Texto da conversa muito longo (máximo ${MAX_CONVERSATION_LENGTH} caracteres)` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    if (hasAttachment) {
+      const allowedMimes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      if (!allowedMimes.includes(attachment.mimeType)) {
+        return new Response(
+          JSON.stringify({ error: "Formato de arquivo inválido. Use PDF, JPG, JPEG ou PNG." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const sanitizedProspectionType = ALLOWED_PROSPECTION_TYPES.includes(prospectionType) 
