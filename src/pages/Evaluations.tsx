@@ -23,6 +23,7 @@ import {
   Upload,
   FileAudio,
   FileText,
+  FileImage,
   X,
   BarChart3,
   Target,
@@ -68,6 +69,7 @@ export default function EvaluationsPage() {
   const [searchParams] = useSearchParams();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const whatsappFileInputRef = useRef<HTMLInputElement>(null);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [viewingEvaluation, setViewingEvaluation] = useState<Evaluation | null>(null);
@@ -79,6 +81,7 @@ export default function EvaluationsPage() {
   const [conversationText, setConversationText] = useState('');
   const [analysisResult, setAnalysisResult] = useState<AIAnalysisResult | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [whatsappFile, setWhatsappFile] = useState<File | null>(null);
 
   // Use hook data if available, otherwise fall back to context
   const allSDRs = sdrsFromHook.length > 0 ? sdrsFromHook : sdrs;
@@ -160,6 +163,7 @@ export default function EvaluationsPage() {
     }
 
     let textToAnalyze = conversationText;
+    let attachment: { data: string; mimeType: string; filename: string } | undefined;
 
     if (prospectionType === 'Ligação' && audioFile && !conversationText.trim()) {
       const transcription = await transcribeAudio(audioFile);
@@ -168,19 +172,36 @@ export default function EvaluationsPage() {
       setConversationText(transcription);
     }
 
-    if (!textToAnalyze.trim()) {
+    if (prospectionType === 'WhatsApp' && whatsappFile && !conversationText.trim()) {
+      const base64 = await fileToBase64(whatsappFile);
+      attachment = { data: base64, mimeType: whatsappFile.type, filename: whatsappFile.name };
+      textToAnalyze = `[Conversa de WhatsApp anexada: ${whatsappFile.name}]`;
+    }
+
+    if (!textToAnalyze.trim() && !attachment) {
       toast.error(prospectionType === 'Ligação'
         ? 'Faça upload do áudio ou cole a transcrição'
-        : 'Cole o texto da conversa');
+        : 'Faça upload do arquivo ou cole o texto da conversa');
       return;
     }
 
-    const result = await analyzeProspection(textToAnalyze, prospectionType);
+    const result = await analyzeProspection(textToAnalyze, prospectionType, attachment);
     if (result) {
       setAnalysisResult(result);
       setCurrentStep('review');
     }
   };
+
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1] ?? result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -202,6 +223,28 @@ export default function EvaluationsPage() {
   const removeAudioFile = () => {
     setAudioFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleWhatsappFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      if (!validTypes.includes(file.type)) {
+        toast.error('Formato inválido. Use PDF, JPG, JPEG ou PNG');
+        return;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        toast.error('Arquivo muito grande. Máximo: 25MB');
+        return;
+      }
+      setWhatsappFile(file);
+      setConversationText('');
+    }
+  };
+
+  const removeWhatsappFile = () => {
+    setWhatsappFile(null);
+    if (whatsappFileInputRef.current) whatsappFileInputRef.current.value = '';
   };
 
   const formatFileSize = (bytes: number) => {
@@ -257,10 +300,12 @@ export default function EvaluationsPage() {
     setConversationText('');
     setAnalysisResult(null);
     setAudioFile(null);
+    setWhatsappFile(null);
     setCurrentStep('input');
     resetAnalysis();
     resetTranscription();
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (whatsappFileInputRef.current) whatsappFileInputRef.current.value = '';
     setIsDialogOpen(false);
   };
 
@@ -404,6 +449,49 @@ export default function EvaluationsPage() {
                         </div>
                       )}
 
+                      {/* File Upload for WhatsApp */}
+                      {prospectionType === 'WhatsApp' && (
+                        <div className="space-y-2">
+                          <Label>Arquivo da Conversa (opcional)</Label>
+                          <input
+                            ref={whatsappFileInputRef}
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                            onChange={handleWhatsappFileChange}
+                            className="hidden"
+                          />
+                          {!whatsappFile ? (
+                            <div
+                              onClick={() => whatsappFileInputRef.current?.click()}
+                              className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-secondary/50 transition-colors"
+                            >
+                              <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                              <p className="text-sm font-medium">Clique para fazer upload</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                PDF, JPG, JPEG, PNG (máx 25MB)
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border border-border">
+                              <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                                {whatsappFile.type === 'application/pdf' ? (
+                                  <FileText className="h-5 w-5 text-primary" />
+                                ) : (
+                                  <FileImage className="h-5 w-5 text-primary" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{whatsappFile.name}</p>
+                                <p className="text-xs text-muted-foreground">{formatFileSize(whatsappFile.size)}</p>
+                              </div>
+                              <Button variant="ghost" size="icon" onClick={removeWhatsappFile} className="h-8 w-8">
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Text Input */}
                       <div className="space-y-2">
                         <Label>
@@ -411,13 +499,20 @@ export default function EvaluationsPage() {
                             ? 'Transcrição (opcional - será gerada automaticamente)'
                             : prospectionType === 'Ligação'
                             ? 'Transcrição (ou faça upload do áudio acima)'
+                            : prospectionType === 'WhatsApp' && whatsappFile
+                            ? 'Texto da conversa (opcional - o arquivo será analisado)'
+                            : prospectionType === 'WhatsApp'
+                            ? 'Conversa (ou faça upload do arquivo acima)'
                             : 'Conversa *'}
                         </Label>
                         <Textarea
                           value={conversationText}
                           onChange={(e) => {
                             setConversationText(e.target.value);
-                            if (e.target.value.trim()) setAudioFile(null);
+                            if (e.target.value.trim()) {
+                              setAudioFile(null);
+                              setWhatsappFile(null);
+                            }
                           }}
                           placeholder={
                             prospectionType === 'Ligação'
@@ -434,6 +529,7 @@ export default function EvaluationsPage() {
                     </div>
                   </ScrollArea>
 
+
                   {/* Fixed Footer */}
                   <div className="flex justify-end gap-2 pt-4 mt-4 border-t">
                     <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
@@ -441,7 +537,7 @@ export default function EvaluationsPage() {
                     </Button>
                     <Button
                       onClick={handleAnalyze}
-                      disabled={!sdrId || !prospectionType || (!conversationText.trim() && !audioFile) || isAnalyzing || isTranscribing}
+                      disabled={!sdrId || !prospectionType || (!conversationText.trim() && !audioFile && !whatsappFile) || isAnalyzing || isTranscribing}
                       className="min-w-[180px]"
                     >
                       {isTranscribing ? (

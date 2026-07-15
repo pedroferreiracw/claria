@@ -76,20 +76,32 @@ serve(async (req) => {
       );
     }
 
-    const { conversationText, prospectionType } = await req.json();
+    const { conversationText, prospectionType, attachment } = await req.json();
 
-    if (!conversationText || typeof conversationText !== 'string') {
+    const hasAttachment = attachment && typeof attachment === 'object' && attachment.data && attachment.mimeType;
+
+    if ((!conversationText || typeof conversationText !== 'string') && !hasAttachment) {
       return new Response(
-        JSON.stringify({ error: "Texto da conversa é obrigatório" }),
+        JSON.stringify({ error: "Texto da conversa ou arquivo é obrigatório" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (conversationText.length > MAX_CONVERSATION_LENGTH) {
+    if (conversationText && conversationText.length > MAX_CONVERSATION_LENGTH) {
       return new Response(
         JSON.stringify({ error: `Texto da conversa muito longo (máximo ${MAX_CONVERSATION_LENGTH} caracteres)` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    if (hasAttachment) {
+      const allowedMimes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      if (!allowedMimes.includes(attachment.mimeType)) {
+        return new Response(
+          JSON.stringify({ error: "Formato de arquivo inválido. Use PDF, JPG, JPEG ou PNG." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const sanitizedProspectionType = ALLOWED_PROSPECTION_TYPES.includes(prospectionType) 
@@ -101,13 +113,18 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const userPrompt = `Analise esta conversa de prospecção (${sanitizedProspectionType}) e forneça a avaliação completa:
+    const textPart = hasAttachment
+      ? `Analise esta conversa de prospecção (${sanitizedProspectionType}) a partir do arquivo anexado${conversationText ? ` e do texto abaixo:\n\n---\n${conversationText}\n---` : '.'}\n\nExtraia o conteúdo da conversa do arquivo (imagem ou PDF) e forneça a avaliação completa. Use a ferramenta analyze_prospection para retornar a análise estruturada.`
+      : `Analise esta conversa de prospecção (${sanitizedProspectionType}) e forneça a avaliação completa:\n\n---\n${conversationText}\n---\n\nUse a ferramenta analyze_prospection para retornar a análise estruturada.`;
 
----
-${conversationText}
----
-
-Use a ferramenta analyze_prospection para retornar a análise estruturada.`;
+    const userContent: unknown = hasAttachment
+      ? [
+          { type: "text", text: textPart },
+          attachment.mimeType === 'application/pdf'
+            ? { type: "file", file: { filename: attachment.filename || 'conversation.pdf', file_data: `data:${attachment.mimeType};base64,${attachment.data}` } }
+            : { type: "image_url", image_url: { url: `data:${attachment.mimeType};base64,${attachment.data}` } },
+        ]
+      : textPart;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -119,7 +136,7 @@ Use a ferramenta analyze_prospection para retornar a análise estruturada.`;
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+          { role: "user", content: userContent },
         ],
         tools: [
           {
