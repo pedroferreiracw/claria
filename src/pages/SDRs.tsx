@@ -80,10 +80,14 @@ export default function SDRsPage() {
     setIsDialogOpen(true);
   };
 
-  const squadCounts = {
-    Águia: sdrs.filter(s => s.squad === 'Águia').length,
-    Lobo: sdrs.filter(s => s.squad === 'Lobo').length,
-  };
+  const squadCounts = useMemo(
+    () =>
+      SQUADS.reduce<Record<Squad, number>>((acc, sq) => {
+        acc[sq.name] = sdrs.filter((s) => s.squad === sq.name).length;
+        return acc;
+      }, {} as Record<Squad, number>),
+    [sdrs]
+  );
 
   const stats = useMemo(() => {
     const total = sdrs.length;
