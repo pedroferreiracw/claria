@@ -163,6 +163,7 @@ export default function EvaluationsPage() {
     }
 
     let textToAnalyze = conversationText;
+    let attachment: { data: string; mimeType: string; filename: string } | undefined;
 
     if (prospectionType === 'Ligação' && audioFile && !conversationText.trim()) {
       const transcription = await transcribeAudio(audioFile);
@@ -171,19 +172,36 @@ export default function EvaluationsPage() {
       setConversationText(transcription);
     }
 
-    if (!textToAnalyze.trim()) {
+    if (prospectionType === 'WhatsApp' && whatsappFile && !conversationText.trim()) {
+      const base64 = await fileToBase64(whatsappFile);
+      attachment = { data: base64, mimeType: whatsappFile.type, filename: whatsappFile.name };
+      textToAnalyze = `[Conversa de WhatsApp anexada: ${whatsappFile.name}]`;
+    }
+
+    if (!textToAnalyze.trim() && !attachment) {
       toast.error(prospectionType === 'Ligação'
         ? 'Faça upload do áudio ou cole a transcrição'
-        : 'Cole o texto da conversa');
+        : 'Faça upload do arquivo ou cole o texto da conversa');
       return;
     }
 
-    const result = await analyzeProspection(textToAnalyze, prospectionType);
+    const result = await analyzeProspection(textToAnalyze, prospectionType, attachment);
     if (result) {
       setAnalysisResult(result);
       setCurrentStep('review');
     }
   };
+
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1] ?? result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
