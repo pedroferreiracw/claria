@@ -300,10 +300,12 @@ export default function EvaluationsPage() {
     setConversationText('');
     setAnalysisResult(null);
     setAudioFile(null);
+    setWhatsappFile(null);
     setCurrentStep('input');
     resetAnalysis();
     resetTranscription();
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (whatsappFileInputRef.current) whatsappFileInputRef.current.value = '';
     setIsDialogOpen(false);
   };
 
