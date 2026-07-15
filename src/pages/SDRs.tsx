@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Users, Bird, Dog, LayoutGrid, Table } from 'lucide-react';
+import { Plus, Users, LayoutGrid, Table } from 'lucide-react';
 import { Squad, SDR, Scores } from '@/types';
+import { SQUADS } from '@/config/squads';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { SDRPerformanceCard } from '@/components/sdr/SDRPerformanceCard';
@@ -79,10 +80,14 @@ export default function SDRsPage() {
     setIsDialogOpen(true);
   };
 
-  const squadCounts = {
-    Águia: sdrs.filter(s => s.squad === 'Águia').length,
-    Lobo: sdrs.filter(s => s.squad === 'Lobo').length,
-  };
+  const squadCounts = useMemo(
+    () =>
+      SQUADS.reduce<Record<Squad, number>>((acc, sq) => {
+        acc[sq.name] = sdrs.filter((s) => s.squad === sq.name).length;
+        return acc;
+      }, {} as Record<Squad, number>),
+    [sdrs]
+  );
 
   const stats = useMemo(() => {
     const total = sdrs.length;
@@ -144,8 +149,14 @@ export default function SDRsPage() {
                         <SelectValue placeholder="Selecione o squad" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Águia"><span className="flex items-center gap-2"><Bird className="h-4 w-4" /> Águia</span></SelectItem>
-                        <SelectItem value="Lobo"><span className="flex items-center gap-2"><Dog className="h-4 w-4" /> Lobo</span></SelectItem>
+                        {SQUADS.map((sq) => {
+                          const Icon = sq.icon;
+                          return (
+                            <SelectItem key={sq.name} value={sq.name}>
+                              <span className="flex items-center gap-2"><Icon className="h-4 w-4" /> {sq.name}</span>
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
@@ -174,10 +185,14 @@ export default function SDRsPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-primary/20 flex items-center justify-center"><Users className="h-6 w-6 text-primary" /></div><div><p className="text-2xl font-bold">{stats.total}</p><p className="text-sm text-muted-foreground">Total SDRs</p></div></CardContent></Card>
-          <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-amber-500/20 flex items-center justify-center"><Bird className="h-6 w-6 text-amber-400" /></div><div><p className="text-2xl font-bold">{squadCounts['Águia']}</p><p className="text-sm text-muted-foreground">Squad Águia</p></div></CardContent></Card>
-          <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-blue-500/20 flex items-center justify-center"><Dog className="h-6 w-6 text-blue-400" /></div><div><p className="text-2xl font-bold">{squadCounts['Lobo']}</p><p className="text-sm text-muted-foreground">Squad Lobo</p></div></CardContent></Card>
+          {SQUADS.map((sq) => {
+            const Icon = sq.icon;
+            return (
+              <Card key={sq.name}><CardContent className="p-4 flex items-center gap-4"><div className={cn("h-12 w-12 rounded-lg flex items-center justify-center", sq.iconBg)}><Icon className={cn("h-6 w-6", sq.iconColor)} /></div><div><p className="text-2xl font-bold">{squadCounts[sq.name]}</p><p className="text-sm text-muted-foreground">Squad {sq.name}</p></div></CardContent></Card>
+            );
+          })}
           <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center"><span className="text-green-500 font-bold">{stats.successRate}%</span></div><div><p className="text-2xl font-bold">{stats.avgScore}</p><p className="text-sm text-muted-foreground">Nota Média</p></div></CardContent></Card>
         </div>
 

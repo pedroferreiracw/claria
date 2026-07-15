@@ -892,7 +892,7 @@ export type Database = {
       closer_evaluation_result: "fechou" | "nao_fechou" | "follow_up"
       prospection_result: "prosseguiu" | "recusou" | "perdeu_interesse"
       prospection_type: "Ligação" | "WhatsApp"
-      squad_type: "Águia" | "Lobo"
+      squad_type: "Águia" | "Lobo" | "Sharks" | "Serpentes"
       team_type: "SDR" | "Closer"
     }
     CompositeTypes: {
@@ -1025,7 +1025,7 @@ export const Constants = {
       closer_evaluation_result: ["fechou", "nao_fechou", "follow_up"],
       prospection_result: ["prosseguiu", "recusou", "perdeu_interesse"],
       prospection_type: ["Ligação", "WhatsApp"],
-      squad_type: ["Águia", "Lobo"],
+      squad_type: ["Águia", "Lobo", "Sharks", "Serpentes"],
       team_type: ["SDR", "Closer"],
     },
   },
