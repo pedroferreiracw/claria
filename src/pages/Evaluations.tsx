@@ -23,6 +23,7 @@ import {
   Upload,
   FileAudio,
   FileText,
+  FileImage,
   X,
   BarChart3,
   Target,
