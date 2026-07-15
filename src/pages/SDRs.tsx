@@ -185,10 +185,14 @@ export default function SDRsPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-primary/20 flex items-center justify-center"><Users className="h-6 w-6 text-primary" /></div><div><p className="text-2xl font-bold">{stats.total}</p><p className="text-sm text-muted-foreground">Total SDRs</p></div></CardContent></Card>
-          <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-amber-500/20 flex items-center justify-center"><Bird className="h-6 w-6 text-amber-400" /></div><div><p className="text-2xl font-bold">{squadCounts['Águia']}</p><p className="text-sm text-muted-foreground">Squad Águia</p></div></CardContent></Card>
-          <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-blue-500/20 flex items-center justify-center"><Dog className="h-6 w-6 text-blue-400" /></div><div><p className="text-2xl font-bold">{squadCounts['Lobo']}</p><p className="text-sm text-muted-foreground">Squad Lobo</p></div></CardContent></Card>
+          {SQUADS.map((sq) => {
+            const Icon = sq.icon;
+            return (
+              <Card key={sq.name}><CardContent className="p-4 flex items-center gap-4"><div className={cn("h-12 w-12 rounded-lg flex items-center justify-center", sq.iconBg)}><Icon className={cn("h-6 w-6", sq.iconColor)} /></div><div><p className="text-2xl font-bold">{squadCounts[sq.name]}</p><p className="text-sm text-muted-foreground">Squad {sq.name}</p></div></CardContent></Card>
+            );
+          })}
           <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center"><span className="text-green-500 font-bold">{stats.successRate}%</span></div><div><p className="text-2xl font-bold">{stats.avgScore}</p><p className="text-sm text-muted-foreground">Nota Média</p></div></CardContent></Card>
         </div>
 
