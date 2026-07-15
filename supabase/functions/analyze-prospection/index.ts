@@ -113,13 +113,18 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const userPrompt = `Analise esta conversa de prospecção (${sanitizedProspectionType}) e forneça a avaliação completa:
+    const textPart = hasAttachment
+      ? `Analise esta conversa de prospecção (${sanitizedProspectionType}) a partir do arquivo anexado${conversationText ? ` e do texto abaixo:\n\n---\n${conversationText}\n---` : '.'}\n\nExtraia o conteúdo da conversa do arquivo (imagem ou PDF) e forneça a avaliação completa. Use a ferramenta analyze_prospection para retornar a análise estruturada.`
+      : `Analise esta conversa de prospecção (${sanitizedProspectionType}) e forneça a avaliação completa:\n\n---\n${conversationText}\n---\n\nUse a ferramenta analyze_prospection para retornar a análise estruturada.`;
 
----
-${conversationText}
----
-
-Use a ferramenta analyze_prospection para retornar a análise estruturada.`;
+    const userContent: unknown = hasAttachment
+      ? [
+          { type: "text", text: textPart },
+          attachment.mimeType === 'application/pdf'
+            ? { type: "file", file: { filename: attachment.filename || 'conversation.pdf', file_data: `data:${attachment.mimeType};base64,${attachment.data}` } }
+            : { type: "image_url", image_url: { url: `data:${attachment.mimeType};base64,${attachment.data}` } },
+        ]
+      : textPart;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -131,7 +136,7 @@ Use a ferramenta analyze_prospection para retornar a análise estruturada.`;
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+          { role: "user", content: userContent },
         ],
         tools: [
           {
