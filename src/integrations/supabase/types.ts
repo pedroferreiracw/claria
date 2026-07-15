@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_learnings: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          learning_type: string | null
+          source_interview_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          learning_type?: string | null
+          source_interview_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          learning_type?: string | null
+          source_interview_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_learnings_source_interview_id_fkey"
+            columns: ["source_interview_id"]
+            isOneToOne: false
+            referencedRelation: "interviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           id: string
@@ -368,6 +400,239 @@ export type Database = {
           },
         ]
       }
+      interviewer_feedback: {
+        Row: {
+          ai_was_accurate: string
+          created_at: string | null
+          decision_reasoning: string
+          final_decision: string
+          id: string
+          interview_id: string | null
+          interviewer_name: string
+          roleplay_notes: string | null
+          standout_negatives: string | null
+          standout_positives: string | null
+          values_alignment_notes: string | null
+          what_ai_missed: string | null
+        }
+        Insert: {
+          ai_was_accurate: string
+          created_at?: string | null
+          decision_reasoning: string
+          final_decision: string
+          id?: string
+          interview_id?: string | null
+          interviewer_name: string
+          roleplay_notes?: string | null
+          standout_negatives?: string | null
+          standout_positives?: string | null
+          values_alignment_notes?: string | null
+          what_ai_missed?: string | null
+        }
+        Update: {
+          ai_was_accurate?: string
+          created_at?: string | null
+          decision_reasoning?: string
+          final_decision?: string
+          id?: string
+          interview_id?: string | null
+          interviewer_name?: string
+          roleplay_notes?: string | null
+          standout_negatives?: string | null
+          standout_positives?: string | null
+          values_alignment_notes?: string | null
+          what_ai_missed?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interviewer_feedback_interview_id_fkey"
+            columns: ["interview_id"]
+            isOneToOne: false
+            referencedRelation: "interviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      interviews: {
+        Row: {
+          candidate_name: string
+          created_at: string | null
+          final_recommendation: string | null
+          final_scores: Json | null
+          id: string
+          interview_date: string | null
+          overall_score: number | null
+          role: string
+          transcript: string | null
+        }
+        Insert: {
+          candidate_name: string
+          created_at?: string | null
+          final_recommendation?: string | null
+          final_scores?: Json | null
+          id?: string
+          interview_date?: string | null
+          overall_score?: number | null
+          role: string
+          transcript?: string | null
+        }
+        Update: {
+          candidate_name?: string
+          created_at?: string | null
+          final_recommendation?: string | null
+          final_scores?: Json | null
+          id?: string
+          interview_date?: string | null
+          overall_score?: number | null
+          role?: string
+          transcript?: string | null
+        }
+        Relationships: []
+      }
+      meetime_backfill_runs: {
+        Row: {
+          error_msg: string | null
+          finished_at: string | null
+          id: number
+          last_next: string | null
+          leads_seen: number
+          leads_upserted: number
+          pages_done: number
+          started_at: string
+          status: string
+        }
+        Insert: {
+          error_msg?: string | null
+          finished_at?: string | null
+          id?: never
+          last_next?: string | null
+          leads_seen?: number
+          leads_upserted?: number
+          pages_done?: number
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          error_msg?: string | null
+          finished_at?: string | null
+          id?: never
+          last_next?: string | null
+          leads_seen?: number
+          leads_upserted?: number
+          pages_done?: number
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      meetime_dup_alerts: {
+        Row: {
+          contact_key: string | null
+          lead_id_a: string | null
+          lead_id_b: string | null
+          notified_at: string
+          owner_a: string | null
+          owner_b: string | null
+          pair_key: string
+        }
+        Insert: {
+          contact_key?: string | null
+          lead_id_a?: string | null
+          lead_id_b?: string | null
+          notified_at?: string
+          owner_a?: string | null
+          owner_b?: string | null
+          pair_key: string
+        }
+        Update: {
+          contact_key?: string | null
+          lead_id_a?: string | null
+          lead_id_b?: string | null
+          notified_at?: string
+          owner_a?: string | null
+          owner_b?: string | null
+          pair_key?: string
+        }
+        Relationships: []
+      }
+      meetime_prospections_idx: {
+        Row: {
+          email: string | null
+          lead_id: string
+          owner_id: string | null
+          owner_name: string | null
+          phone: string | null
+          phone_raw: string | null
+          prospection_id: string
+          public_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          email?: string | null
+          lead_id: string
+          owner_id?: string | null
+          owner_name?: string | null
+          phone?: string | null
+          phone_raw?: string | null
+          prospection_id: string
+          public_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          email?: string | null
+          lead_id?: string
+          owner_id?: string | null
+          owner_name?: string | null
+          phone?: string | null
+          phone_raw?: string | null
+          prospection_id?: string
+          public_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meetime_sdr_slack: {
+        Row: {
+          email: string | null
+          owner_id: string
+          owner_name: string | null
+          slack_id: string
+          updated_at: string
+        }
+        Insert: {
+          email?: string | null
+          owner_id: string
+          owner_name?: string | null
+          slack_id: string
+          updated_at?: string
+        }
+        Update: {
+          email?: string | null
+          owner_id?: string
+          owner_name?: string | null
+          slack_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      metas_panel_state: {
+        Row: {
+          data: Json
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          data: Json
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          data?: Json
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       monthly_scores: {
         Row: {
           average_score: number
@@ -584,6 +849,42 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      meetime_detect_duplicates: {
+        Args: never
+        Returns: {
+          contact_key: string
+          details: Json
+          lead_a: string
+          lead_b: string
+          leads: string[]
+          mentions: string
+          pair_key: string
+          phone_display: string
+          sdrs: string[]
+        }[]
+      }
+      meetime_mark_alerted: {
+        Args: {
+          p_contact_key: string
+          p_lead_id_a: string
+          p_lead_id_b: string
+          p_pair_key: string
+        }
+        Returns: undefined
+      }
+      meetime_upsert_lead: {
+        Args: {
+          p_email: string
+          p_lead_id: string
+          p_owner_id: string
+          p_owner_name: string
+          p_phone: string
+          p_phone_raw?: string
+          p_prospection_id: string
+          p_public_url?: string
+        }
+        Returns: undefined
       }
     }
     Enums: {
