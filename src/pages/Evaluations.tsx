@@ -225,6 +225,28 @@ export default function EvaluationsPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleWhatsappFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      if (!validTypes.includes(file.type)) {
+        toast.error('Formato inválido. Use PDF, JPG, JPEG ou PNG');
+        return;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        toast.error('Arquivo muito grande. Máximo: 25MB');
+        return;
+      }
+      setWhatsappFile(file);
+      setConversationText('');
+    }
+  };
+
+  const removeWhatsappFile = () => {
+    setWhatsappFile(null);
+    if (whatsappFileInputRef.current) whatsappFileInputRef.current.value = '';
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
