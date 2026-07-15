@@ -19,7 +19,8 @@ export function useAIAnalysis() {
 
   const analyzeProspection = async (
     conversationText: string,
-    prospectionType: 'Ligação' | 'WhatsApp'
+    prospectionType: 'Ligação' | 'WhatsApp',
+    attachment?: { data: string; mimeType: string; filename: string }
   ): Promise<AIAnalysisResult | null> => {
     setIsAnalyzing(true);
     setError(null);
@@ -27,7 +28,7 @@ export function useAIAnalysis() {
 
     try {
       const { data, error: functionError } = await supabase.functions.invoke('analyze-prospection', {
-        body: { conversationText, prospectionType }
+        body: { conversationText, prospectionType, attachment }
       });
 
       if (functionError) {
