@@ -69,6 +69,7 @@ export default function EvaluationsPage() {
   const [searchParams] = useSearchParams();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const whatsappFileInputRef = useRef<HTMLInputElement>(null);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [viewingEvaluation, setViewingEvaluation] = useState<Evaluation | null>(null);
@@ -80,6 +81,7 @@ export default function EvaluationsPage() {
   const [conversationText, setConversationText] = useState('');
   const [analysisResult, setAnalysisResult] = useState<AIAnalysisResult | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [whatsappFile, setWhatsappFile] = useState<File | null>(null);
 
   // Use hook data if available, otherwise fall back to context
   const allSDRs = sdrsFromHook.length > 0 ? sdrsFromHook : sdrs;
