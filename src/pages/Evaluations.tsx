@@ -85,7 +85,7 @@ export default function EvaluationsPage() {
 
   // Use hook data if available, otherwise fall back to context
   const allSDRs = sdrsFromHook.length > 0 ? sdrsFromHook : sdrs;
-  const sdrOnly = allSDRs;
+  const sdrOnly = allSDRs.filter((s) => s.isActive !== false);
   const allEvaluations = evaluationsFromHook.length > 0 ? evaluationsFromHook : [];
 
   // Filters
