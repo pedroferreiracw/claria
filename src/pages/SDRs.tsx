@@ -44,16 +44,29 @@ export default function SDRsPage() {
     return avgScores as Scores;
   }, [evaluations]);
 
-  // Rank SDRs by average score
+  // Status counts (from synced sheet data)
+  const statusCounts = useMemo(() => {
+    const active = sdrs.filter((s) => s.isActive !== false).length;
+    const inactive = sdrs.length - active;
+    return { all: sdrs.length, active, inactive };
+  }, [sdrs]);
+
+  // Rank SDRs by average score (filtered by status)
   const rankedSDRs = useMemo(() => {
-    return sdrs.map(sdr => {
+    const filtered = sdrs.filter((sdr) => {
+      const active = sdr.isActive !== false;
+      if (statusFilter === 'active') return active;
+      if (statusFilter === 'inactive') return !active;
+      return true;
+    });
+    return filtered.map(sdr => {
       const sdrEvals = evaluations.filter(e => e.sdrId === sdr.id);
       const avgScore = sdrEvals.length > 0
         ? Math.round(sdrEvals.reduce((sum, e) => sum + e.finalScore, 0) / sdrEvals.length)
         : 0;
       return { sdr, avgScore, evaluations: sdrEvals };
     }).sort((a, b) => b.avgScore - a.avgScore);
-  }, [sdrs, evaluations]);
+  }, [sdrs, evaluations, statusFilter]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
