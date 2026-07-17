@@ -119,11 +119,12 @@ Deno.serve(async (req) => {
     const headers = rows[0].map(h => norm(h));
     const nameIdx = headers.findIndex(h => h === norm('Nome do Colaborador') || h === 'nome do colaborador');
     const journeyIdx = headers.findIndex(h => h === norm('Jornada do colaborador') || h === 'jornada do colaborador');
+    const positionIdx = headers.findIndex(h => h === norm('Posição') || h === 'posicao' || h === 'posição');
 
-    if (nameIdx === -1 || journeyIdx === -1) {
+    if (nameIdx === -1 || journeyIdx === -1 || positionIdx === -1) {
       return new Response(JSON.stringify({
         error: 'Colunas obrigatórias ausentes.',
-        required: ['Nome do Colaborador', 'Jornada do colaborador'],
+        required: ['Nome do Colaborador', 'Jornada do colaborador', 'Posição'],
         found: rows[0],
       }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
