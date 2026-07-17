@@ -296,6 +296,13 @@ Deno.serve(async (req) => {
       if (!error) { deactivated.push(r.name); updated.push(r.name); }
       else console.error('deactivate sdr failed:', r.name, error.message);
     }
+    for (const t of reconcileTargets) {
+      const { error } = await admin.from('sdrs')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', t.id);
+      if (!error) { deactivated.push(t.name); updated.push(t.name); }
+      else console.error('reconcile deactivate failed:', t.name, error.message);
+    }
 
     return new Response(JSON.stringify({
       ok: true,
