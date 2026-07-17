@@ -5,6 +5,8 @@ interface Body {
   url: string;
   sheetName: string;
   mode: 'test' | 'sync';
+  /** Se true, desativa qualquer SDR do banco que NÃO esteja como "Ativo" (Posição=SDR) na planilha. */
+  reconcile?: boolean;
 }
 
 const VALID_SQUADS = ['Águia', 'Lobo', 'Sharks', 'Serpentes'] as const;
@@ -224,6 +226,19 @@ Deno.serve(async (req) => {
       else { plan.unchanged++; preview.push({ name: r.name, journey: r.journey, action: 'unchanged', willBeActive: false }); }
     }
 
+    // ===== RECONCILIAÇÃO: desativa quem está ativo no banco mas NÃO é SDR-Ativo na planilha =====
+    const activeKeysInSheet = new Set(activeRows.map(r => nameKey(r.name)));
+    const reconcileTargets: { id: string; name: string }[] = [];
+    if (body.reconcile) {
+      for (const [k, s] of byKey.entries()) {
+        if (s.is_active && !activeKeysInSheet.has(k)) {
+          reconcileTargets.push({ id: s.id, name: s.name });
+          plan.deactivate++;
+          preview.push({ name: s.name, journey: '(ausente da planilha)', action: 'deactivate', willBeActive: false });
+        }
+      }
+    }
+
     if (body.mode === 'test') {
       return new Response(JSON.stringify({
         ok: true,
@@ -280,6 +295,13 @@ Deno.serve(async (req) => {
         .eq('id', found.id);
       if (!error) { deactivated.push(r.name); updated.push(r.name); }
       else console.error('deactivate sdr failed:', r.name, error.message);
+    }
+    for (const t of reconcileTargets) {
+      const { error } = await admin.from('sdrs')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', t.id);
+      if (!error) { deactivated.push(t.name); updated.push(t.name); }
+      else console.error('reconcile deactivate failed:', t.name, error.message);
     }
 
     return new Response(JSON.stringify({

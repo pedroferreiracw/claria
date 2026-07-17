@@ -38,6 +38,7 @@ const ACTION_META: Record<Action, { label: string; variant: 'default' | 'seconda
 export default function SheetsSyncPage() {
   const [url, setUrl] = useState('');
   const [sheetName, setSheetName] = useState('Página1');
+  const [reconcile, setReconcile] = useState(true);
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
@@ -54,7 +55,7 @@ export default function SheetsSyncPage() {
     else { setSyncing(true); setSyncResult(null); }
     try {
       const { data, error: fnError } = await supabase.functions.invoke('sync-sheets', {
-        body: { url, sheetName, mode },
+        body: { url, sheetName, mode, reconcile },
       });
       if (fnError) {
         const details = (fnError as any).context ? await (fnError as any).context.text() : fnError.message;
@@ -123,8 +124,21 @@ export default function SheetsSyncPage() {
           </div>
           <div className="text-sm text-muted-foreground">
             Colunas obrigatórias: <Badge variant="secondary">Nome do Colaborador</Badge>{' '}
-            <Badge variant="secondary">Jornada do colaborador</Badge>
+            <Badge variant="secondary">Jornada do colaborador</Badge>{' '}
+            <Badge variant="secondary">Posição</Badge>{' '}
+            <Badge variant="outline">Squad (opcional)</Badge>
           </div>
+          <label className="flex items-start gap-2 text-sm cursor-pointer select-none rounded-md border p-3 bg-muted/30">
+            <input
+              type="checkbox"
+              checked={reconcile}
+              onChange={(e) => { setReconcile(e.target.checked); setTestResult(null); }}
+              className="mt-0.5 h-4 w-4 accent-primary"
+            />
+            <span>
+              <span className="font-medium">Reconciliação total</span> — desativa qualquer SDR do sistema que <b>não</b> apareça como <Badge variant="secondary" className="mx-1">Posição=SDR</Badge> e <Badge variant="secondary">Jornada=Ativo</Badge> na planilha. Use para corrigir totais e squads que ficaram inflados por importações anteriores.
+            </span>
+          </label>
           <div className="flex flex-wrap gap-3 pt-2">
             <Button variant="outline" onClick={() => call('test')} disabled={!url || !sheetName || testing || syncing}>
               {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
