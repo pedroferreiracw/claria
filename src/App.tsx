@@ -51,6 +51,7 @@ const App = () => (
                 <Route path="/gamification" element={<ProtectedRoute><GamificationPage /></ProtectedRoute>} />
                 <Route path="/intelligence" element={<ProtectedRoute><IntelligencePage /></ProtectedRoute>} />
                 <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
+                <Route path="/sheets-sync" element={<AdminRoute><SheetsSyncPage /></AdminRoute>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
