@@ -9,6 +9,7 @@ interface SDRRow {
   squad: string;
   role: string;
   avatar_url: string | null;
+  is_active: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -19,6 +20,7 @@ const mapRowToSDR = (row: SDRRow): SDR => ({
   squad: row.squad as Squad,
   role: row.role,
   avatarUrl: row.avatar_url ?? undefined,
+  isActive: row.is_active !== false,
   createdAt: new Date(row.created_at),
 });
 

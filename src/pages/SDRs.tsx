@@ -21,6 +21,7 @@ export default function SDRsPage() {
   const [editingSDR, setEditingSDR] = useState<SDR | null>(null);
   const [selectedSDR, setSelectedSDR] = useState<SDR | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [formData, setFormData] = useState({
     name: '',
     squad: '' as Squad | '',
@@ -43,16 +44,29 @@ export default function SDRsPage() {
     return avgScores as Scores;
   }, [evaluations]);
 
-  // Rank SDRs by average score
+  // Status counts (from synced sheet data)
+  const statusCounts = useMemo(() => {
+    const active = sdrs.filter((s) => s.isActive !== false).length;
+    const inactive = sdrs.length - active;
+    return { all: sdrs.length, active, inactive };
+  }, [sdrs]);
+
+  // Rank SDRs by average score (filtered by status)
   const rankedSDRs = useMemo(() => {
-    return sdrs.map(sdr => {
+    const filtered = sdrs.filter((sdr) => {
+      const active = sdr.isActive !== false;
+      if (statusFilter === 'active') return active;
+      if (statusFilter === 'inactive') return !active;
+      return true;
+    });
+    return filtered.map(sdr => {
       const sdrEvals = evaluations.filter(e => e.sdrId === sdr.id);
       const avgScore = sdrEvals.length > 0
         ? Math.round(sdrEvals.reduce((sum, e) => sum + e.finalScore, 0) / sdrEvals.length)
         : 0;
       return { sdr, avgScore, evaluations: sdrEvals };
     }).sort((a, b) => b.avgScore - a.avgScore);
-  }, [sdrs, evaluations]);
+  }, [sdrs, evaluations, statusFilter]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,6 +208,24 @@ export default function SDRsPage() {
             );
           })}
           <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center"><span className="text-green-500 font-bold">{stats.successRate}%</span></div><div><p className="text-2xl font-bold">{stats.avgScore}</p><p className="text-sm text-muted-foreground">Nota Média</p></div></CardContent></Card>
+        </div>
+
+        {/* Status Filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {([
+            { key: 'all', label: 'Todos', count: statusCounts.all },
+            { key: 'active', label: 'Ativos', count: statusCounts.active },
+            { key: 'inactive', label: 'Inativos', count: statusCounts.inactive },
+          ] as const).map((opt) => (
+            <Button
+              key={opt.key}
+              size="sm"
+              variant={statusFilter === opt.key ? 'accent' : 'outline'}
+              onClick={() => setStatusFilter(opt.key)}
+            >
+              {opt.label} ({opt.count})
+            </Button>
+          ))}
         </div>
 
         {/* SDR Cards */}
