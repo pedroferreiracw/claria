@@ -226,6 +226,19 @@ Deno.serve(async (req) => {
       else { plan.unchanged++; preview.push({ name: r.name, journey: r.journey, action: 'unchanged', willBeActive: false }); }
     }
 
+    // ===== RECONCILIAÇÃO: desativa quem está ativo no banco mas NÃO é SDR-Ativo na planilha =====
+    const activeKeysInSheet = new Set(activeRows.map(r => nameKey(r.name)));
+    const reconcileTargets: { id: string; name: string }[] = [];
+    if (body.reconcile) {
+      for (const [k, s] of byKey.entries()) {
+        if (s.is_active && !activeKeysInSheet.has(k)) {
+          reconcileTargets.push({ id: s.id, name: s.name });
+          plan.deactivate++;
+          preview.push({ name: s.name, journey: '(ausente da planilha)', action: 'deactivate', willBeActive: false });
+        }
+      }
+    }
+
     if (body.mode === 'test') {
       return new Response(JSON.stringify({
         ok: true,
