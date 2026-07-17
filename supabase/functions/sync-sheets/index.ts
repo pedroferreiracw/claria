@@ -140,11 +140,18 @@ Deno.serve(async (req) => {
       for (let i = 1; i < rows.length; i++) {
         const name = (rows[i][nameIdx] ?? '').trim();
         const journey = (rows[i][journeyIdx] ?? '').trim();
+        const position = (rows[i][positionIdx] ?? '').trim();
         if (!name) { plan.skipped++; continue; }
+        // Ignora completamente qualquer cargo diferente de SDR
+        if (position.toLowerCase() !== 'sdr') { plan.skipped++; continue; }
         const shouldBeActive = journey.toLowerCase() === 'ativo';
         const found = byNamePrev.get(norm(name));
         let action: 'create' | 'activate' | 'deactivate' | 'unchanged';
-        if (!found) { action = 'create'; plan.create++; }
+        if (!found) {
+          // Só cria se estiver ativo; caso contrário, ignora
+          if (!shouldBeActive) { plan.skipped++; continue; }
+          action = 'create'; plan.create++;
+        }
         else if (found.is_active === shouldBeActive) { action = 'unchanged'; plan.unchanged++; }
         else if (shouldBeActive) { action = 'activate'; plan.activate++; }
         else { action = 'deactivate'; plan.deactivate++; }
