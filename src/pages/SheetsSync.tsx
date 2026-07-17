@@ -55,7 +55,7 @@ export default function SheetsSyncPage() {
     else { setSyncing(true); setSyncResult(null); }
     try {
       const { data, error: fnError } = await supabase.functions.invoke('sync-sheets', {
-        body: { url, sheetName, mode },
+        body: { url, sheetName, mode, reconcile },
       });
       if (fnError) {
         const details = (fnError as any).context ? await (fnError as any).context.text() : fnError.message;
