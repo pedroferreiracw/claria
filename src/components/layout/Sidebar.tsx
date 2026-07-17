@@ -14,7 +14,8 @@ import {
   GitCompare,
   BookOpen,
   Trophy,
-  Brain
+  Brain,
+  FileSpreadsheet
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
