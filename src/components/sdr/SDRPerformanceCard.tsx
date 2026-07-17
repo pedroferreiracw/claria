@@ -125,12 +125,19 @@ export function SDRPerformanceCard({ sdr, evaluations, rank, onClick }: SDRPerfo
           <div>
             <h3 className="font-semibold line-clamp-1">{sdr.name}</h3>
             <p className="text-xs text-muted-foreground">{sdr.role}</p>
-            <Badge
-              variant="outline"
-              className={cn('mt-1 text-xs', getSquadConfig(sdr.squad).badge)}
-            >
-              {sdr.squad}
-            </Badge>
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
+              <Badge
+                variant="outline"
+                className={cn('text-xs', getSquadConfig(sdr.squad).badge)}
+              >
+                {sdr.squad}
+              </Badge>
+              {sdr.isActive === false && (
+                <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border">
+                  Inativo
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
         {getRankBadge()}
