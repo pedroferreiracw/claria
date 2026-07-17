@@ -182,18 +182,23 @@ Deno.serve(async (req) => {
     for (let i = 1; i < rows.length; i++) {
       const name = (rows[i][nameIdx] ?? '').trim();
       const journey = (rows[i][journeyIdx] ?? '').trim();
+      const position = (rows[i][positionIdx] ?? '').trim();
       if (!name) continue;
+      // Ignora completamente qualquer cargo diferente de SDR
+      if (position.toLowerCase() !== 'sdr') continue;
       const shouldBeActive = journey.toLowerCase() === 'ativo';
       const key = norm(name);
       const found = byName.get(key);
 
       if (!found) {
+        // Não cria SDR inativo — apenas SDRs com Jornada = "Ativo" entram no banco
+        if (!shouldBeActive) continue;
         const { error } = await admin.from('sdrs').insert({
           name,
           squad: 'Serpentes',
           role: 'SDR',
           team_type: 'SDR',
-          is_active: shouldBeActive,
+          is_active: true,
         });
         if (!error) created.push(name);
       } else if (found.is_active !== shouldBeActive) {
