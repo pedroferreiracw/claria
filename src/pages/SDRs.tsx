@@ -21,6 +21,7 @@ export default function SDRsPage() {
   const [editingSDR, setEditingSDR] = useState<SDR | null>(null);
   const [selectedSDR, setSelectedSDR] = useState<SDR | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [formData, setFormData] = useState({
     name: '',
     squad: '' as Squad | '',
