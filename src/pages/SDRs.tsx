@@ -210,6 +210,24 @@ export default function SDRsPage() {
           <Card><CardContent className="p-4 flex items-center gap-4"><div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center"><span className="text-green-500 font-bold">{stats.successRate}%</span></div><div><p className="text-2xl font-bold">{stats.avgScore}</p><p className="text-sm text-muted-foreground">Nota Média</p></div></CardContent></Card>
         </div>
 
+        {/* Status Filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {([
+            { key: 'all', label: 'Todos', count: statusCounts.all },
+            { key: 'active', label: 'Ativos', count: statusCounts.active },
+            { key: 'inactive', label: 'Inativos', count: statusCounts.inactive },
+          ] as const).map((opt) => (
+            <Button
+              key={opt.key}
+              size="sm"
+              variant={statusFilter === opt.key ? 'accent' : 'outline'}
+              onClick={() => setStatusFilter(opt.key)}
+            >
+              {opt.label} ({opt.count})
+            </Button>
+          ))}
+        </div>
+
         {/* SDR Cards */}
         <div className={cn(viewMode === 'cards' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-3")}>
           {rankedSDRs.map(({ sdr, evaluations: sdrEvals }, index) => (
