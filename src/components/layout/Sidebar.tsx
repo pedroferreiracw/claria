@@ -14,7 +14,8 @@ import {
   GitCompare,
   BookOpen,
   Trophy,
-  Brain
+  Brain,
+  FileSpreadsheet
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -240,18 +241,32 @@ export function Sidebar() {
 
           {/* Admin Settings Link */}
           {isAdmin && (
-            <NavLink
-              to="/settings"
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                location.pathname === '/settings'
-                  ? "gradient-accent text-accent-foreground shadow-lg shadow-accent/20" 
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              )}
-            >
-              <Settings className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>Configurações</span>}
-            </NavLink>
+            <>
+              <NavLink
+                to="/sheets-sync"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                  location.pathname === '/sheets-sync'
+                    ? "gradient-accent text-accent-foreground shadow-lg shadow-accent/20"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                )}
+              >
+                <FileSpreadsheet className="h-5 w-5 shrink-0" />
+                {!collapsed && <span>Sincronizar Sheets</span>}
+              </NavLink>
+              <NavLink
+                to="/settings"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                  location.pathname === '/settings'
+                    ? "gradient-accent text-accent-foreground shadow-lg shadow-accent/20"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                )}
+              >
+                <Settings className="h-5 w-5 shrink-0" />
+                {!collapsed && <span>Configurações</span>}
+              </NavLink>
+            </>
           )}
         </nav>
 

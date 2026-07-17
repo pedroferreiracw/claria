@@ -23,6 +23,7 @@ import CloserEvaluationsPage from "./pages/CloserEvaluations";
 import IntelligencePage from "./pages/Intelligence";
 import AuthPage from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import SheetsSyncPage from "./pages/SheetsSync";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ const App = () => (
                 <Route path="/gamification" element={<ProtectedRoute><GamificationPage /></ProtectedRoute>} />
                 <Route path="/intelligence" element={<ProtectedRoute><IntelligencePage /></ProtectedRoute>} />
                 <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
+                <Route path="/sheets-sync" element={<AdminRoute><SheetsSyncPage /></AdminRoute>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
