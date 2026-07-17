@@ -23,6 +23,7 @@ import CloserEvaluationsPage from "./pages/CloserEvaluations";
 import IntelligencePage from "./pages/Intelligence";
 import AuthPage from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import SheetsSyncPage from "./pages/SheetsSync";
 
 const queryClient = new QueryClient();
 
