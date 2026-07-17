@@ -38,6 +38,7 @@ const ACTION_META: Record<Action, { label: string; variant: 'default' | 'seconda
 export default function SheetsSyncPage() {
   const [url, setUrl] = useState('');
   const [sheetName, setSheetName] = useState('Página1');
+  const [reconcile, setReconcile] = useState(true);
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
