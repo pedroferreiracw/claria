@@ -7,6 +7,9 @@ interface Body {
   mode: 'test' | 'sync';
 }
 
+const VALID_SQUADS = ['Águia', 'Lobo', 'Sharks', 'Serpentes'] as const;
+type SquadType = typeof VALID_SQUADS[number];
+
 function extractSpreadsheetId(url: string): string | null {
   const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   return m ? m[1] : null;
@@ -16,7 +19,6 @@ function buildCsvUrl(spreadsheetId: string, sheetName: string): string {
   return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
 }
 
-// Minimal RFC 4180 CSV parser
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let cur: string[] = [];
@@ -41,15 +43,38 @@ function parseCsv(text: string): string[][] {
   return rows.filter(r => r.some(v => v.trim() !== ''));
 }
 
-function norm(s: string): string {
-  return s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+/** Chave canônica de nome: sem acentos, minúsculo, espaços internos colapsados. */
+function nameKey(s: string): string {
+  return s
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function headerKey(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+/** Mapeia o valor bruto de Squad da planilha para um enum válido. Retorna null se não bater. */
+function resolveSquad(raw: string): SquadType | null {
+  const k = nameKey(raw);
+  if (!k) return null;
+  for (const s of VALID_SQUADS) {
+    if (nameKey(s) === k) return s;
+  }
+  // sinônimos comuns
+  if (k === 'aguia' || k === 'águia') return 'Águia';
+  if (k === 'lobos') return 'Lobo';
+  if (k === 'shark' || k === 'tubarao' || k === 'tubarões') return 'Sharks';
+  if (k === 'serpente' || k === 'cobras') return 'Serpentes';
+  return null;
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    // Auth + admin gate
     const authHeader = req.headers.get('Authorization') ?? '';
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -89,8 +114,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const csvUrl = buildCsvUrl(spreadsheetId, body.sheetName);
-    const resp = await fetch(csvUrl, { redirect: 'follow' });
+    const resp = await fetch(buildCsvUrl(spreadsheetId, body.sheetName), { redirect: 'follow' });
     if (!resp.ok) {
       const text = await resp.text();
       let msg = `Não foi possível acessar a planilha (HTTP ${resp.status}).`;
@@ -102,7 +126,6 @@ Deno.serve(async (req) => {
     }
 
     const csvText = await resp.text();
-    // Google returns HTML error page when spreadsheet is not public
     if (csvText.trim().startsWith('<')) {
       return new Response(JSON.stringify({ error: 'A planilha não está pública. Compartilhe como "Qualquer pessoa com o link — Leitor".' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -116,10 +139,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    const headers = rows[0].map(h => norm(h));
-    const nameIdx = headers.findIndex(h => h === norm('Nome do Colaborador') || h === 'nome do colaborador');
-    const journeyIdx = headers.findIndex(h => h === norm('Jornada do colaborador') || h === 'jornada do colaborador');
-    const positionIdx = headers.findIndex(h => h === norm('Posição') || h === 'posicao' || h === 'posição');
+    const headers = rows[0].map(h => headerKey(h));
+    const nameIdx = headers.findIndex(h => h === 'nome do colaborador');
+    const journeyIdx = headers.findIndex(h => h === 'jornada do colaborador');
+    const positionIdx = headers.findIndex(h => h === 'posicao');
+    const squadIdx = headers.findIndex(h => h === 'squad');
 
     if (nameIdx === -1 || journeyIdx === -1 || positionIdx === -1) {
       return new Response(JSON.stringify({
@@ -129,35 +153,78 @@ Deno.serve(async (req) => {
       }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    if (body.mode === 'test') {
-      const { data: existingForPreview } = await admin
-        .from('sdrs').select('id, name, is_active');
-      const byNamePrev = new Map<string, { is_active: boolean }>();
-      for (const s of existingForPreview ?? []) byNamePrev.set(norm(s.name), { is_active: s.is_active });
+    // Carrega estado atual do banco e monta índice por chave canônica.
+    // Se houver duplicidades pré-existentes, mantém a MAIS ANTIGA como canônica
+    // e marca as demais para não gerarem falso "novo".
+    const { data: existing } = await admin
+      .from('sdrs').select('id, name, squad, is_active, created_at')
+      .order('created_at', { ascending: true });
 
-      const preview = [];
-      const plan = { create: 0, activate: 0, deactivate: 0, unchanged: 0, skipped: 0 };
-      for (let i = 1; i < rows.length; i++) {
-        const name = (rows[i][nameIdx] ?? '').trim();
-        const journey = (rows[i][journeyIdx] ?? '').trim();
-        const position = (rows[i][positionIdx] ?? '').trim();
-        if (!name) { plan.skipped++; continue; }
-        // Ignora completamente qualquer cargo diferente de SDR
-        if (position.toLowerCase() !== 'sdr') { plan.skipped++; continue; }
-        const shouldBeActive = journey.toLowerCase() === 'ativo';
-        const found = byNamePrev.get(norm(name));
-        let action: 'create' | 'activate' | 'deactivate' | 'unchanged';
-        if (!found) {
-          // Só cria se estiver ativo; caso contrário, ignora
-          if (!shouldBeActive) { plan.skipped++; continue; }
-          action = 'create'; plan.create++;
-        }
-        else if (found.is_active === shouldBeActive) { action = 'unchanged'; plan.unchanged++; }
-        else if (shouldBeActive) { action = 'activate'; plan.activate++; }
-        else { action = 'deactivate'; plan.deactivate++; }
-        preview.push({ name, journey, action, willBeActive: shouldBeActive });
+    const byKey = new Map<string, { id: string; name: string; squad: string; is_active: boolean }>();
+    for (const s of existing ?? []) {
+      const k = nameKey(s.name);
+      if (!k) continue;
+      if (!byKey.has(k)) byKey.set(k, { id: s.id, name: s.name, squad: s.squad, is_active: s.is_active });
+    }
+
+    // ===== PASSO 1 + 2: filtra Posição = SDR; separa ativos (candidatos a criar/atualizar)
+    // dos inativos (só usados para desativar existentes) =====
+    type SheetRow = { name: string; journey: string; squad: SquadType | null; squadRaw: string; isActive: boolean };
+    const activeRows: SheetRow[] = [];
+    const inactiveRows: SheetRow[] = [];
+    let skipped = 0;
+
+    // Dedup dentro da própria planilha
+    const seenInSheet = new Set<string>();
+
+    for (let i = 1; i < rows.length; i++) {
+      const name = (rows[i][nameIdx] ?? '').trim();
+      const journey = (rows[i][journeyIdx] ?? '').trim();
+      const position = (rows[i][positionIdx] ?? '').trim();
+      const squadRaw = squadIdx >= 0 ? (rows[i][squadIdx] ?? '').trim() : '';
+
+      if (!name) { skipped++; continue; }
+      if (position.toLowerCase() !== 'sdr') { skipped++; continue; }
+
+      const k = nameKey(name);
+      if (seenInSheet.has(k)) { skipped++; continue; }
+      seenInSheet.add(k);
+
+      const isActive = journey.toLowerCase() === 'ativo';
+      const squad = resolveSquad(squadRaw);
+      const row: SheetRow = { name, journey, squad, squadRaw, isActive };
+      if (isActive) activeRows.push(row);
+      else inactiveRows.push(row);
+    }
+
+    // ===== Monta plano =====
+    const plan = { create: 0, activate: 0, deactivate: 0, unchanged: 0, skipped };
+    const preview: { name: string; journey: string; action: 'create' | 'activate' | 'deactivate' | 'unchanged'; willBeActive: boolean }[] = [];
+
+    // Ativos: criar ou atualizar existente
+    for (const r of activeRows) {
+      const found = byKey.get(nameKey(r.name));
+      let action: 'create' | 'activate' | 'unchanged';
+      if (!found) { action = 'create'; plan.create++; }
+      else {
+        const squadChanges = r.squad && r.squad !== found.squad;
+        const activityChanges = !found.is_active;
+        if (activityChanges) { action = 'activate'; plan.activate++; }
+        else if (squadChanges) { action = 'unchanged'; plan.unchanged++; /* update silencioso */ }
+        else { action = 'unchanged'; plan.unchanged++; }
       }
+      preview.push({ name: r.name, journey: r.journey, action, willBeActive: true });
+    }
 
+    // Inativos: apenas desativar quem já existir (nunca criar)
+    for (const r of inactiveRows) {
+      const found = byKey.get(nameKey(r.name));
+      if (!found) { plan.skipped++; continue; }
+      if (found.is_active) { plan.deactivate++; preview.push({ name: r.name, journey: r.journey, action: 'deactivate', willBeActive: false }); }
+      else { plan.unchanged++; preview.push({ name: r.name, journey: r.journey, action: 'unchanged', willBeActive: false }); }
+    }
+
+    if (body.mode === 'test') {
       return new Response(JSON.stringify({
         ok: true,
         spreadsheetId,
@@ -168,49 +235,51 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // SYNC
-    const { data: existing } = await admin
-      .from('sdrs').select('id, name, is_active');
-    const byName = new Map<string, { id: string; is_active: boolean }>();
-    for (const s of existing ?? []) byName.set(norm(s.name), { id: s.id, is_active: s.is_active });
-
+    // ===== SYNC =====
     const created: string[] = [];
     const updated: string[] = [];
     const deactivated: string[] = [];
     const reactivated: string[] = [];
 
-    for (let i = 1; i < rows.length; i++) {
-      const name = (rows[i][nameIdx] ?? '').trim();
-      const journey = (rows[i][journeyIdx] ?? '').trim();
-      const position = (rows[i][positionIdx] ?? '').trim();
-      if (!name) continue;
-      // Ignora completamente qualquer cargo diferente de SDR
-      if (position.toLowerCase() !== 'sdr') continue;
-      const shouldBeActive = journey.toLowerCase() === 'ativo';
-      const key = norm(name);
-      const found = byName.get(key);
+    for (const r of activeRows) {
+      const found = byKey.get(nameKey(r.name));
+      const squadToUse: SquadType = r.squad ?? (found?.squad as SquadType | undefined) ?? 'Serpentes';
 
       if (!found) {
-        // Não cria SDR inativo — apenas SDRs com Jornada = "Ativo" entram no banco
-        if (!shouldBeActive) continue;
         const { error } = await admin.from('sdrs').insert({
-          name,
-          squad: 'Serpentes',
+          name: r.name,
+          squad: squadToUse,
           role: 'SDR',
           team_type: 'SDR',
           is_active: true,
         });
-        if (!error) created.push(name);
-      } else if (found.is_active !== shouldBeActive) {
-        const { error } = await admin.from('sdrs')
-          .update({ is_active: shouldBeActive, updated_at: new Date().toISOString() })
-          .eq('id', found.id);
-        if (!error) {
-          if (shouldBeActive) reactivated.push(name);
-          else deactivated.push(name);
-          updated.push(name);
+        if (!error) created.push(r.name);
+        else console.error('insert sdr failed:', r.name, error.message);
+      } else {
+        const patch: Record<string, unknown> = {};
+        if (!found.is_active) patch.is_active = true;
+        if (r.squad && r.squad !== found.squad) patch.squad = r.squad;
+        if (Object.keys(patch).length > 0) {
+          patch.updated_at = new Date().toISOString();
+          const { error } = await admin.from('sdrs').update(patch).eq('id', found.id);
+          if (!error) {
+            if (patch.is_active === true) reactivated.push(r.name);
+            updated.push(r.name);
+          } else {
+            console.error('update sdr failed:', r.name, error.message);
+          }
         }
       }
+    }
+
+    for (const r of inactiveRows) {
+      const found = byKey.get(nameKey(r.name));
+      if (!found || !found.is_active) continue;
+      const { error } = await admin.from('sdrs')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', found.id);
+      if (!error) { deactivated.push(r.name); updated.push(r.name); }
+      else console.error('deactivate sdr failed:', r.name, error.message);
     }
 
     return new Response(JSON.stringify({
