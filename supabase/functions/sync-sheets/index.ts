@@ -5,6 +5,8 @@ interface Body {
   url: string;
   sheetName: string;
   mode: 'test' | 'sync';
+  /** Se true, desativa qualquer SDR do banco que NÃO esteja como "Ativo" (Posição=SDR) na planilha. */
+  reconcile?: boolean;
 }
 
 const VALID_SQUADS = ['Águia', 'Lobo', 'Sharks', 'Serpentes'] as const;
