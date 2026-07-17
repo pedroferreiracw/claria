@@ -129,15 +129,34 @@ Deno.serve(async (req) => {
     }
 
     if (body.mode === 'test') {
+      const { data: existingForPreview } = await admin
+        .from('sdrs').select('id, name, is_active');
+      const byNamePrev = new Map<string, { is_active: boolean }>();
+      for (const s of existingForPreview ?? []) byNamePrev.set(norm(s.name), { is_active: s.is_active });
+
+      const preview = [];
+      const plan = { create: 0, activate: 0, deactivate: 0, unchanged: 0, skipped: 0 };
+      for (let i = 1; i < rows.length; i++) {
+        const name = (rows[i][nameIdx] ?? '').trim();
+        const journey = (rows[i][journeyIdx] ?? '').trim();
+        if (!name) { plan.skipped++; continue; }
+        const shouldBeActive = journey.toLowerCase() === 'ativo';
+        const found = byNamePrev.get(norm(name));
+        let action: 'create' | 'activate' | 'deactivate' | 'unchanged';
+        if (!found) { action = 'create'; plan.create++; }
+        else if (found.is_active === shouldBeActive) { action = 'unchanged'; plan.unchanged++; }
+        else if (shouldBeActive) { action = 'activate'; plan.activate++; }
+        else { action = 'deactivate'; plan.deactivate++; }
+        preview.push({ name, journey, action, willBeActive: shouldBeActive });
+      }
+
       return new Response(JSON.stringify({
         ok: true,
         spreadsheetId,
         sheetName: body.sheetName,
         totalRows: rows.length - 1,
-        preview: rows.slice(1, 6).map(r => ({
-          name: r[nameIdx]?.trim() ?? '',
-          journey: r[journeyIdx]?.trim() ?? '',
-        })),
+        plan,
+        preview,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
