@@ -119,11 +119,12 @@ Deno.serve(async (req) => {
     const headers = rows[0].map(h => norm(h));
     const nameIdx = headers.findIndex(h => h === norm('Nome do Colaborador') || h === 'nome do colaborador');
     const journeyIdx = headers.findIndex(h => h === norm('Jornada do colaborador') || h === 'jornada do colaborador');
+    const positionIdx = headers.findIndex(h => h === norm('Posição') || h === 'posicao' || h === 'posição');
 
-    if (nameIdx === -1 || journeyIdx === -1) {
+    if (nameIdx === -1 || journeyIdx === -1 || positionIdx === -1) {
       return new Response(JSON.stringify({
         error: 'Colunas obrigatórias ausentes.',
-        required: ['Nome do Colaborador', 'Jornada do colaborador'],
+        required: ['Nome do Colaborador', 'Jornada do colaborador', 'Posição'],
         found: rows[0],
       }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -139,11 +140,18 @@ Deno.serve(async (req) => {
       for (let i = 1; i < rows.length; i++) {
         const name = (rows[i][nameIdx] ?? '').trim();
         const journey = (rows[i][journeyIdx] ?? '').trim();
+        const position = (rows[i][positionIdx] ?? '').trim();
         if (!name) { plan.skipped++; continue; }
+        // Ignora completamente qualquer cargo diferente de SDR
+        if (position.toLowerCase() !== 'sdr') { plan.skipped++; continue; }
         const shouldBeActive = journey.toLowerCase() === 'ativo';
         const found = byNamePrev.get(norm(name));
         let action: 'create' | 'activate' | 'deactivate' | 'unchanged';
-        if (!found) { action = 'create'; plan.create++; }
+        if (!found) {
+          // Só cria se estiver ativo; caso contrário, ignora
+          if (!shouldBeActive) { plan.skipped++; continue; }
+          action = 'create'; plan.create++;
+        }
         else if (found.is_active === shouldBeActive) { action = 'unchanged'; plan.unchanged++; }
         else if (shouldBeActive) { action = 'activate'; plan.activate++; }
         else { action = 'deactivate'; plan.deactivate++; }
@@ -174,18 +182,23 @@ Deno.serve(async (req) => {
     for (let i = 1; i < rows.length; i++) {
       const name = (rows[i][nameIdx] ?? '').trim();
       const journey = (rows[i][journeyIdx] ?? '').trim();
+      const position = (rows[i][positionIdx] ?? '').trim();
       if (!name) continue;
+      // Ignora completamente qualquer cargo diferente de SDR
+      if (position.toLowerCase() !== 'sdr') continue;
       const shouldBeActive = journey.toLowerCase() === 'ativo';
       const key = norm(name);
       const found = byName.get(key);
 
       if (!found) {
+        // Não cria SDR inativo — apenas SDRs com Jornada = "Ativo" entram no banco
+        if (!shouldBeActive) continue;
         const { error } = await admin.from('sdrs').insert({
           name,
           squad: 'Serpentes',
           role: 'SDR',
           team_type: 'SDR',
-          is_active: shouldBeActive,
+          is_active: true,
         });
         if (!error) created.push(name);
       } else if (found.is_active !== shouldBeActive) {
