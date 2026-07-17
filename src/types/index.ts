@@ -11,6 +11,7 @@ export interface SDR {
   role: string;
   createdAt: Date;
   avatarUrl?: string;
+  isActive: boolean;
 }
 
 export interface Objection {
