@@ -5,14 +5,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
-import { FileSpreadsheet, RefreshCw, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { FileSpreadsheet, RefreshCw, CheckCircle2, AlertCircle, Loader2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
+type Action = 'create' | 'activate' | 'deactivate' | 'unchanged';
+interface PreviewRow { name: string; journey: string; action: Action; willBeActive: boolean; }
 interface TestResult {
   ok: boolean;
   totalRows: number;
-  preview: { name: string; journey: string }[];
+  plan: { create: number; activate: number; deactivate: number; unchanged: number; skipped: number };
+  preview: PreviewRow[];
 }
 interface SyncResult {
   ok: boolean;
@@ -24,6 +28,13 @@ interface SyncResult {
   reactivated: string[];
 }
 
+const ACTION_META: Record<Action, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }> = {
+  create:     { label: 'Novo',       variant: 'default' },
+  activate:   { label: 'Reativar',   variant: 'default',   className: 'bg-emerald-500 hover:bg-emerald-500' },
+  deactivate: { label: 'Inativar',   variant: 'destructive' },
+  unchanged:  { label: 'Sem mudança', variant: 'outline' },
+};
+
 export default function SheetsSyncPage() {
   const [url, setUrl] = useState('');
   const [sheetName, setSheetName] = useState('Página1');
@@ -32,13 +43,14 @@ export default function SheetsSyncPage() {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | Action>('all');
   const [lastSync, setLastSync] = useState<string | null>(
     localStorage.getItem('sheets_last_sync')
   );
 
   const call = async (mode: 'test' | 'sync') => {
     setError(null);
-    if (mode === 'test') { setTesting(true); setTestResult(null); }
+    if (mode === 'test') { setTesting(true); setTestResult(null); setSyncResult(null); }
     else { setSyncing(true); setSyncResult(null); }
     try {
       const { data, error: fnError } = await supabase.functions.invoke('sync-sheets', {
@@ -51,9 +63,10 @@ export default function SheetsSyncPage() {
       if (data?.error) throw new Error(data.error);
       if (mode === 'test') {
         setTestResult(data);
-        toast.success(`Conexão OK — ${data.totalRows} linhas encontradas`);
+        toast.success(`Prévia carregada — ${data.totalRows} linha(s)`);
       } else {
         setSyncResult(data);
+        setTestResult(null);
         localStorage.setItem('sheets_last_sync', data.syncedAt);
         setLastSync(data.syncedAt);
         toast.success('Sincronização concluída');
@@ -67,6 +80,8 @@ export default function SheetsSyncPage() {
       setTesting(false); setSyncing(false);
     }
   };
+
+  const filteredPreview = testResult?.preview.filter(r => filter === 'all' || r.action === filter) ?? [];
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -112,14 +127,23 @@ export default function SheetsSyncPage() {
           </div>
           <div className="flex flex-wrap gap-3 pt-2">
             <Button variant="outline" onClick={() => call('test')} disabled={!url || !sheetName || testing || syncing}>
-              {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-              Testar conexão
+              {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
+              Ver prévia
             </Button>
-            <Button onClick={() => call('sync')} disabled={!url || !sheetName || testing || syncing}>
+            <Button
+              onClick={() => call('sync')}
+              disabled={!url || !sheetName || testing || syncing || !testResult}
+              title={!testResult ? 'Gere a prévia antes de sincronizar' : undefined}
+            >
               {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-              Sincronizar agora
+              Confirmar e sincronizar
             </Button>
           </div>
+          {!testResult && (
+            <p className="text-xs text-muted-foreground">
+              Gere uma prévia primeiro para revisar os registros antes de sincronizar.
+            </p>
+          )}
           {lastSync && (
             <p className="text-xs text-muted-foreground">
               Última sincronização: {new Date(lastSync).toLocaleString('pt-BR')}
@@ -139,30 +163,62 @@ export default function SheetsSyncPage() {
       {testResult && (
         <Card>
           <CardHeader>
-            <CardTitle>Prévia — {testResult.totalRows} linha(s)</CardTitle>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <CardTitle>Prévia da sincronização</CardTitle>
+                <CardDescription>
+                  {testResult.totalRows} linha(s) lidas da planilha. Revise antes de confirmar.
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <PlanChip active={filter === 'all'}        onClick={() => setFilter('all')}        label="Todos"       count={testResult.preview.length} />
+                <PlanChip active={filter === 'create'}     onClick={() => setFilter('create')}     label="Novos"       count={testResult.plan.create} tone="primary" />
+                <PlanChip active={filter === 'activate'}   onClick={() => setFilter('activate')}   label="Reativar"    count={testResult.plan.activate} tone="success" />
+                <PlanChip active={filter === 'deactivate'} onClick={() => setFilter('deactivate')} label="Inativar"    count={testResult.plan.deactivate} tone="warning" />
+                <PlanChip active={filter === 'unchanged'}  onClick={() => setFilter('unchanged')}  label="Sem mudança" count={testResult.plan.unchanged} />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="border rounded-lg overflow-hidden">
+            <ScrollArea className="h-[420px] border rounded-lg">
               <table className="w-full text-sm">
-                <thead className="bg-muted">
+                <thead className="bg-muted sticky top-0">
                   <tr>
+                    <th className="text-left p-2 w-12">#</th>
                     <th className="text-left p-2">Nome do Colaborador</th>
                     <th className="text-left p-2">Jornada do colaborador</th>
+                    <th className="text-left p-2">Ação prevista</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {testResult.preview.map((r, i) => (
-                    <tr key={i} className="border-t">
-                      <td className="p-2">{r.name}</td>
-                      <td className="p-2">
-                        <Badge variant={r.journey.toLowerCase() === 'ativo' ? 'default' : 'secondary'}>
-                          {r.journey || '—'}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredPreview.map((r, i) => {
+                    const meta = ACTION_META[r.action];
+                    return (
+                      <tr key={i} className="border-t">
+                        <td className="p-2 text-muted-foreground">{i + 1}</td>
+                        <td className="p-2 font-medium">{r.name || <span className="text-muted-foreground italic">(sem nome)</span>}</td>
+                        <td className="p-2">
+                          <Badge variant={r.willBeActive ? 'default' : 'secondary'}>
+                            {r.journey || '—'}
+                          </Badge>
+                        </td>
+                        <td className="p-2">
+                          <Badge variant={meta.variant} className={meta.className}>{meta.label}</Badge>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredPreview.length === 0 && (
+                    <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">Nenhum registro neste filtro.</td></tr>
+                  )}
                 </tbody>
               </table>
+            </ScrollArea>
+            <div className="flex justify-end pt-4">
+              <Button onClick={() => call('sync')} disabled={syncing || testing}>
+                {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                Confirmar e sincronizar {testResult.totalRows} registro(s)
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -177,6 +233,22 @@ export default function SheetsSyncPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function PlanChip({ label, count, active, onClick, tone }: { label: string; count: number; active: boolean; onClick: () => void; tone?: 'primary' | 'success' | 'warning' }) {
+  const toneClass = active
+    ? tone === 'success' ? 'bg-emerald-500 text-white border-emerald-500'
+    : tone === 'warning' ? 'bg-amber-500 text-white border-amber-500'
+    : 'bg-primary text-primary-foreground border-primary'
+    : 'bg-background hover:bg-muted';
+  return (
+    <button
+      onClick={onClick}
+      className={`text-xs px-3 py-1 rounded-full border transition ${toneClass}`}
+    >
+      {label} <span className="ml-1 opacity-80">{count}</span>
+    </button>
   );
 }
 
