@@ -789,6 +789,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           id: string
+          is_active: boolean
           name: string
           role: string
           squad: Database["public"]["Enums"]["squad_type"]
@@ -799,6 +800,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           id?: string
+          is_active?: boolean
           name: string
           role: string
           squad: Database["public"]["Enums"]["squad_type"]
@@ -809,6 +811,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           id?: string
+          is_active?: boolean
           name?: string
           role?: string
           squad?: Database["public"]["Enums"]["squad_type"]
