@@ -3,6 +3,21 @@ import { supabase } from '@/integrations/supabase/client';
 import { Evaluation, ProspectionType, ProspectionResult, Scores, Objection, AIFeedback } from '@/types';
 import { toast } from 'sonner';
 
+/** Converte um Date para "YYYY-MM-DD" no fuso horário local (evita shift UTC). */
+const toLocalDateString = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+/** Parseia "YYYY-MM-DD" como data local (evita interpretar como UTC 00:00). */
+const parseLocalDate = (s: string): Date => {
+  if (/T|Z|\+/.test(s)) return new Date(s);
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
+
 interface EvaluationRow {
   id: string;
   sdr_id: string;
