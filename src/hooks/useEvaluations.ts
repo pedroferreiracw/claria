@@ -40,7 +40,7 @@ const mapRowToEvaluation = (row: EvaluationRow): Evaluation => ({
   id: row.id,
   sdrId: row.sdr_id,
   type: row.type as ProspectionType,
-  date: new Date(row.date),
+  date: parseLocalDate(row.date),
   conversationText: row.conversation_text ?? undefined,
   audioUrl: row.audio_url ?? undefined,
   questionsAsked: row.questions_asked || [],
@@ -76,7 +76,7 @@ export function useAddEvaluation() {
       const insertData = {
         sdr_id: evaluation.sdrId,
         type: evaluation.type,
-        date: evaluation.date.toISOString().split('T')[0],
+        date: toLocalDateString(evaluation.date),
         conversation_text: evaluation.conversationText,
         audio_url: evaluation.audioUrl,
         questions_asked: evaluation.questionsAsked,
@@ -115,7 +115,7 @@ export function useUpdateEvaluation() {
       const updateData: Record<string, unknown> = {};
       if (data.sdrId) updateData.sdr_id = data.sdrId;
       if (data.type) updateData.type = data.type;
-      if (data.date) updateData.date = data.date.toISOString().split('T')[0];
+      if (data.date) updateData.date = toLocalDateString(data.date);
       if (data.conversationText !== undefined) updateData.conversation_text = data.conversationText;
       if (data.audioUrl !== undefined) updateData.audio_url = data.audioUrl;
       if (data.questionsAsked) updateData.questions_asked = data.questionsAsked;
