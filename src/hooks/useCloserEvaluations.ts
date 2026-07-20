@@ -3,6 +3,21 @@ import { supabase } from '@/integrations/supabase/client';
 import { CloserEvaluation, CloserScores, CloserAIFeedback, CloserObjection, CloserEvaluationResult } from '@/types/closer';
 import { toast } from 'sonner';
 
+/** "YYYY-MM-DD" no fuso local (evita shift UTC ao salvar). */
+const toLocalDateString = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+/** Parseia "YYYY-MM-DD" como data local (evita interpretar como UTC 00:00). */
+const parseLocalDate = (s: string): Date => {
+  if (/T|Z|\+/.test(s)) return new Date(s);
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
+
 interface CloserEvaluationRow {
   id: string;
   closer_id: string;
@@ -25,7 +40,7 @@ function mapRowToCloserEvaluation(row: CloserEvaluationRow): CloserEvaluation {
   return {
     id: row.id,
     closerId: row.closer_id,
-    date: new Date(row.date),
+    date: parseLocalDate(row.date),
     videoUrl: row.video_url || undefined,
     transcription: row.transcription || undefined,
     scores: row.scores as CloserScores,
@@ -63,7 +78,7 @@ export function useAddCloserEvaluation() {
     mutationFn: async (evaluation: Omit<CloserEvaluation, 'id' | 'createdAt' | 'updatedAt'>) => {
       const insertData = {
         closer_id: evaluation.closerId,
-        date: evaluation.date.toISOString().split('T')[0],
+        date: toLocalDateString(evaluation.date),
         video_url: evaluation.videoUrl || null,
         transcription: evaluation.transcription || null,
         scores: evaluation.scores as any,
@@ -102,7 +117,7 @@ export function useUpdateCloserEvaluation() {
     mutationFn: async ({ id, data }: { id: string; data: Partial<CloserEvaluation> }) => {
       const updateData: any = {};
       if (data.closerId !== undefined) updateData.closer_id = data.closerId;
-      if (data.date !== undefined) updateData.date = data.date.toISOString().split('T')[0];
+      if (data.date !== undefined) updateData.date = toLocalDateString(data.date);
       if (data.videoUrl !== undefined) updateData.video_url = data.videoUrl;
       if (data.transcription !== undefined) updateData.transcription = data.transcription;
       if (data.scores !== undefined) updateData.scores = data.scores;
