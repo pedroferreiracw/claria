@@ -14,6 +14,55 @@ export interface SDR {
   isActive?: boolean;
 }
 
+export type JourneyStage =
+  | 'abertura'
+  | 'apresentacao'
+  | 'rapport'
+  | 'descoberta'
+  | 'levantamento_necessidades'
+  | 'apresentacao_solucao'
+  | 'objecoes'
+  | 'tratamento_objecoes'
+  | 'negociacao'
+  | 'fechamento'
+  | 'proximo_passo'
+  | 'compromisso_assumido'
+  | 'encerramento';
+
+export type JourneyPosition = 'inicio' | 'meio' | 'fim';
+
+export interface ConversationTurn {
+  turnIndex: number;
+  speaker: string;
+  text: string;
+  charStart?: number;
+  charEnd?: number;
+}
+
+export interface JourneyEvent {
+  stage: JourneyStage;
+  position: JourneyPosition;
+  turnRefs?: number[];
+  quote: string;
+  charStart?: number;
+  charEnd?: number;
+  participants?: string[];
+  explanation: string;
+}
+
+export interface FeedbackItemObject {
+  titulo: string;
+  quote?: string;
+  stage?: JourneyStage;
+  turnRef?: number;
+  charStart?: number;
+  charEnd?: number;
+  justificativa?: string;
+}
+
+/** Compat: avaliações antigas salvam string; novas salvam objeto. */
+export type FeedbackItem = string | FeedbackItemObject;
+
 export interface Objection {
   id: string;
   description: string;
@@ -28,6 +77,10 @@ export interface Objection {
   objectionEnd?: number;
   responseStart?: number;
   responseEnd?: number;
+  stage?: JourneyStage;
+  position?: JourneyPosition;
+  turnRefObjection?: number;
+  turnRefResponse?: number;
 }
 
 export interface Scores {
@@ -42,19 +95,57 @@ export interface Scores {
   comunicacaoOratoria: number;
 }
 
+export interface ObjectionAnalysis {
+  objection: string;
+  wasEffective: boolean;
+  melhorContorno: string;
+  respostaIdeal: string;
+  stage?: JourneyStage;
+  position?: JourneyPosition;
+  clientQuote?: string;
+  sdrResponse?: string;
+  turnRefObjection?: number;
+  turnRefResponse?: number;
+  charStartObjection?: number;
+  charEndObjection?: number;
+  charStartResponse?: number;
+  charEndResponse?: number;
+  justificativaTecnica?: string;
+}
+
 export interface AIFeedback {
-  pontosFortes: string[];
-  pontosFracos: string[];
+  pontosFortes: FeedbackItem[];
+  pontosFracos: FeedbackItem[];
   recomendacoesBant: string[];
   recomendacoesProcesso: string[];
   recomendacoesComunicacao: string[];
-  analiseObjecoes: {
-    objection: string;
-    wasEffective: boolean;
-    melhorContorno: string;
-    respostaIdeal: string;
-  }[];
+  analiseObjecoes: ObjectionAnalysis[];
+  conversationTimeline?: ConversationTurn[];
+  journeyMap?: JourneyEvent[];
 }
+
+export function feedbackTitle(item: FeedbackItem): string {
+  return typeof item === 'string' ? item : item.titulo;
+}
+export function feedbackEvidence(item: FeedbackItem): FeedbackItemObject | null {
+  return typeof item === 'string' ? null : item;
+}
+
+export const journeyStageLabels: Record<JourneyStage, string> = {
+  abertura: 'Abertura',
+  apresentacao: 'Apresentação',
+  rapport: 'Rapport',
+  descoberta: 'Descoberta',
+  levantamento_necessidades: 'Levantamento de Necessidades',
+  apresentacao_solucao: 'Apresentação da Solução',
+  objecoes: 'Objeções',
+  tratamento_objecoes: 'Tratamento de Objeções',
+  negociacao: 'Negociação',
+  fechamento: 'Fechamento',
+  proximo_passo: 'Próximo Passo',
+  compromisso_assumido: 'Compromisso Assumido',
+  encerramento: 'Encerramento',
+};
 
 export interface Evaluation {
   id: string;
