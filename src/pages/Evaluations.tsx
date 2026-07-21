@@ -1091,8 +1091,8 @@ export default function EvaluationsPage() {
                                   <p className="text-muted-foreground">
                                     <span className="font-medium">Melhor contorno:</span> {a.melhorContorno}
                                   </p>
-                                  <p className="text-primary">
-                                    <span className="font-medium">Resposta ideal:</span> {a.respostaIdeal}
+                                  <p className="text-foreground">
+                                    <span className="font-medium text-primary-foreground">Resposta ideal:</span> {a.respostaIdeal}
                                   </p>
                                 </div>
                               ))}
