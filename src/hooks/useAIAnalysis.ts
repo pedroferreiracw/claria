@@ -32,10 +32,19 @@ export function useAIAnalysis() {
       });
 
       if (functionError) {
-        throw new Error(functionError.message);
+        // Tenta extrair a mensagem real do body (Supabase Functions client não expõe body em erros não-2xx)
+        let detailedMessage = functionError.message;
+        try {
+          const ctx = (functionError as unknown as { context?: Response }).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error) detailedMessage = body.error;
+          }
+        } catch { /* ignore parse errors */ }
+        throw new Error(detailedMessage);
       }
 
-      if (data.error) {
+      if (data?.error) {
         throw new Error(data.error);
       }
 
