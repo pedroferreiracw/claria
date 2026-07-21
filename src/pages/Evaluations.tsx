@@ -31,9 +31,12 @@ import {
   FileWarning,
   Brain
 } from 'lucide-react';
-import { ProspectionType, ProspectionResult, Scores, Evaluation, calculateFinalScore, getScoreColor, getScoreBgColor } from '@/types';
+import { ProspectionType, ProspectionResult, Scores, Evaluation, calculateFinalScore, getScoreColor, getScoreBgColor, feedbackTitle } from '@/types';
 import { useAIAnalysis, AIAnalysisResult } from '@/hooks/useAIAnalysis';
 import { useAudioTranscription } from '@/hooks/useAudioTranscription';
+import { ConversationMap } from '@/components/evaluations/ConversationMap';
+import { ConversationViewer, HighlightTarget } from '@/components/evaluations/ConversationViewer';
+import { FeedbackList } from '@/components/evaluations/FeedbackList';
 import { useEvaluations, useDeleteEvaluation } from '@/hooks/useEvaluations';
 import { useSDRs } from '@/hooks/useSDRs';
 import { useAddDevelopmentPlan } from '@/hooks/useDevelopmentPlans';
