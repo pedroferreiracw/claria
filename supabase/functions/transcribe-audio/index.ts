@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resolveGeminiModel } from "../_shared/gemini-model.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,7 +8,7 @@ const corsHeaders = {
 };
 
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
-const GEMINI_MODEL = 'gemini-2.5-flash';
+
 
 const ALLOWED_MIME_TYPES = [
   'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/x-wav',
@@ -65,7 +66,8 @@ serve(async (req) => {
 
     const geminiMime = normalizeMime(mimeType);
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const model = await resolveGeminiModel(GEMINI_API_KEY);
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
     const response = await fetch(geminiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

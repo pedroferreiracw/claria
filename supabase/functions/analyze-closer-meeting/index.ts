@@ -1,11 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { resolveGeminiModel } from "../_shared/gemini-model.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const GEMINI_MODEL = 'gemini-2.5-flash';
 
 const CLOSER_CRITERIA = `
 CRITÉRIOS DE AVALIAÇÃO (30 critérios com pesos):
@@ -135,7 +135,8 @@ INSTRUÇÕES:
 4. Forneça feedback construtivo.
 Retorne SEMPRE via analyze_closer_meeting.`;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const model = await resolveGeminiModel(GEMINI_API_KEY);
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
     const response = await fetch(geminiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

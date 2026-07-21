@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resolveGeminiModel } from "../_shared/gemini-model.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,7 +9,7 @@ const corsHeaders = {
 
 const MAX_CONVERSATION_LENGTH = 50000;
 const ALLOWED_PROSPECTION_TYPES = ['WhatsApp', 'Ligação', 'Email', 'Reunião'];
-const GEMINI_MODEL = 'gemini-2.5-flash';
+
 
 const systemPrompt = `Você é um especialista em análise de prospecções comerciais da Cardápio Web, empresa de soluções digitais para restaurantes.
 
@@ -151,7 +152,8 @@ serve(async (req) => {
       parts.push({ inline_data: { mime_type: attachment.mimeType, data: attachment.data } });
     }
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const model = await resolveGeminiModel(GEMINI_API_KEY);
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
     const response = await fetch(geminiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
