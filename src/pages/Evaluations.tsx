@@ -85,6 +85,19 @@ export default function EvaluationsPage() {
   const [analysisResult, setAnalysisResult] = useState<AIAnalysisResult | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [whatsappFile, setWhatsappFile] = useState<File | null>(null);
+  const [previewTab, setPreviewTab] = useState('map');
+  const [previewHighlight, setPreviewHighlight] = useState<HighlightTarget | null>(null);
+  const [viewTab, setViewTab] = useState('map');
+  const [viewHighlight, setViewHighlight] = useState<HighlightTarget | null>(null);
+
+  const jumpToConversationPreview = (h: HighlightTarget) => {
+    setPreviewHighlight(h);
+    setPreviewTab('conversation');
+  };
+  const jumpToConversationView = (h: HighlightTarget) => {
+    setViewHighlight(h);
+    setViewTab('conversation');
+  };
 
   // Use hook data if available, otherwise fall back to context
   const allSDRs = sdrsFromHook.length > 0 ? sdrsFromHook : sdrs;
