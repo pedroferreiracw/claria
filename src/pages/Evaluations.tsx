@@ -599,13 +599,30 @@ export default function EvaluationsPage() {
                       </Badge>
                     </div>
 
-                    <Tabs defaultValue="radar">
-                      <TabsList className="grid w-full grid-cols-4">
+                    <Tabs value={previewTab} onValueChange={setPreviewTab}>
+                      <TabsList className="grid w-full grid-cols-6">
+                        <TabsTrigger value="map">Mapa</TabsTrigger>
+                        <TabsTrigger value="conversation">Conversa</TabsTrigger>
                         <TabsTrigger value="radar">Radar</TabsTrigger>
                         <TabsTrigger value="scores">Scores</TabsTrigger>
                         <TabsTrigger value="objections">Objeções</TabsTrigger>
                         <TabsTrigger value="feedback">Feedback IA</TabsTrigger>
                       </TabsList>
+
+                      <TabsContent value="map" className="mt-4">
+                        <ConversationMap
+                          events={analysisResult.aiFeedback.journeyMap}
+                          onSelectEvidence={jumpToConversationPreview}
+                        />
+                      </TabsContent>
+
+                      <TabsContent value="conversation" className="mt-4">
+                        <ConversationViewer
+                          timeline={analysisResult.aiFeedback.conversationTimeline}
+                          fallbackText={conversationText}
+                          highlight={previewHighlight}
+                        />
+                      </TabsContent>
 
                       <TabsContent value="radar" className="mt-4">
                         <Card>
@@ -665,6 +682,23 @@ export default function EvaluationsPage() {
                                     <p className="text-xs text-muted-foreground">{obj.aiExplanation}</p>
                                   </div>
                                 )}
+                                {(obj.clientQuote || typeof obj.turnRefObjection === 'number') && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-[11px]"
+                                    onClick={() => jumpToConversationPreview({
+                                      turnRef: obj.turnRefObjection,
+                                      charStart: obj.objectionStart,
+                                      charEnd: obj.objectionEnd,
+                                      quote: obj.clientQuote,
+                                      key: Date.now(),
+                                    })}
+                                  >
+                                    Ver na conversa
+                                  </Button>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -672,22 +706,24 @@ export default function EvaluationsPage() {
                       </TabsContent>
 
                       <TabsContent value="feedback" className="mt-4 space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
                             <p className="text-xs font-medium text-green-500 mb-2">Pontos Fortes</p>
-                            <ul className="text-xs space-y-1">
-                              {analysisResult.aiFeedback.pontosFortes.slice(0, 3).map((p, i) => (
-                                <li key={i}>• {p}</li>
-                              ))}
-                            </ul>
+                            <FeedbackList
+                              items={analysisResult.aiFeedback.pontosFortes}
+                              variant="positive"
+                              onViewInConversation={jumpToConversationPreview}
+                              compact
+                            />
                           </div>
                           <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
                             <p className="text-xs font-medium text-red-500 mb-2">A Melhorar</p>
-                            <ul className="text-xs space-y-1">
-                              {analysisResult.aiFeedback.pontosFracos.slice(0, 3).map((p, i) => (
-                                <li key={i}>• {p}</li>
-                              ))}
-                            </ul>
+                            <FeedbackList
+                              items={analysisResult.aiFeedback.pontosFracos}
+                              variant="negative"
+                              onViewInConversation={jumpToConversationPreview}
+                              compact
+                            />
                           </div>
                         </div>
                       </TabsContent>
