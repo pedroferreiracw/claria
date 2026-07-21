@@ -10,10 +10,9 @@ const corsHeaders = {
 const MAX_CONVERSATION_LENGTH = 50000;
 const ALLOWED_PROSPECTION_TYPES = ['WhatsApp', 'Ligação', 'Email', 'Reunião'];
 
-
 const systemPrompt = `Você é um especialista em análise de prospecções comerciais da Cardápio Web, empresa de soluções digitais para restaurantes.
 
-Sua tarefa é analisar conversas de prospecção (ligação ou WhatsApp) e avaliar o desempenho do SDR.
+Sua tarefa é analisar conversas de prospecção (ligação ou WhatsApp) e avaliar o desempenho do SDR — sempre com EVIDÊNCIAS NAVEGÁVEIS.
 
 CONTEXTO DA EMPRESA:
 - Cardápio Web vende soluções digitais para restaurantes
@@ -35,26 +34,96 @@ PESOS:
 - Peso maior (1.5x): BANT, Dores, Condução para Agendamento, Gatilho de Compromisso, Contorno de Objeções
 - Peso normal (1.0x): Abertura, Rapport, Geração de Valor, Comunicação e Oratória
 
-Para CADA objeção identificada, você DEVE preencher obrigatoriamente:
-- description: resumo curto da objeção;
-- speaker: quem levantou (geralmente "Cliente");
-- clientQuote: trecho LITERAL (copiado da conversa, sem parafrasear) onde o cliente fez a objeção;
-- sdrResponse: trecho LITERAL da resposta do SDR;
-- wasEffective: true se a objeção foi efetivamente contornada, false caso contrário;
-- aiExplanation: justificativa clara (2-4 frases) do PORQUÊ você considerou contornada ou não;
-- objectionMessageId / responseMessageId: identificador da mensagem (ex.: "msg-14") ou índice numérico ("14") das mensagens usadas;
-- objectionStart/objectionEnd/responseStart/responseEnd: offsets de caractere no texto original, quando o input for texto.
+PROCESSO OBRIGATÓRIO (em ordem):
 
-Retorne SEMPRE a análise chamando a função analyze_prospection.`;
+PASSO 1 — TIMELINE
+Normalize a conversa em turnos cronológicos e retorne em "conversationTimeline":
+- turnIndex (0, 1, 2, ...)
+- speaker ("SDR" ou "Cliente" quando possível)
+- text (fala LITERAL do turno)
+- charStart / charEnd (offsets do turno no texto original, quando a entrada for texto)
+
+PASSO 2 — MAPA DA JORNADA
+Em "journeyMap", identifique os momentos em que ocorreram os eventos abaixo (não force eventos inexistentes; omita os que não ocorreram):
+abertura, apresentacao, rapport, descoberta, levantamento_necessidades, apresentacao_solucao, objecoes, tratamento_objecoes, negociacao, fechamento, proximo_passo, compromisso_assumido, encerramento.
+
+Para CADA evento retorne:
+- stage (enum acima)
+- position: "inicio" | "meio" | "fim" (posição relativa na conversa completa)
+- turnRefs: índices dos turnos envolvidos
+- quote: trecho LITERAL da conversa (copiado, sem parafrasear) que fundamenta a identificação
+- charStart / charEnd (quando disponível)
+- participants: ["SDR"], ["Cliente"] ou ["SDR","Cliente"]
+- explanation: 1-3 frases justificando por que classificou como esta etapa
+
+PASSO 3 — AVALIAÇÃO
+Aplique os critérios com base na timeline e no mapa.
+
+Para CADA objeção em "objections":
+- description, speaker, clientQuote (LITERAL), sdrResponse (LITERAL), wasEffective, aiExplanation
+- objectionMessageId / responseMessageId ou turnRefObjection / turnRefResponse
+- objectionStart/End, responseStart/End (offsets no texto quando aplicável)
+- stage e position (em que etapa da jornada a objeção surgiu)
+
+Em "aiFeedback":
+- pontosFortes[] e pontosFracos[]: cada item é um OBJETO com:
+    { titulo, quote (trecho literal), stage, turnRef, charStart, charEnd, justificativa }
+- analiseObjecoes[]: mantém objection/wasEffective/melhorContorno/respostaIdeal e adiciona:
+    stage, position, clientQuote, sdrResponse, turnRefObjection, turnRefResponse,
+    charStartObjection, charEndObjection, charStartResponse, charEndResponse,
+    justificativaTecnica
+
+Regras:
+- Quotes SEMPRE literais. Nunca parafraseie o cliente ou o SDR.
+- Se não houver evidência, NÃO invente. Omita o item.
+- Retorne SEMPRE a análise chamando a função analyze_prospection.`;
 
 const functionDeclaration = {
   name: "analyze_prospection",
-  description: "Retorna a análise estruturada da prospecção",
+  description: "Retorna a análise estruturada da prospecção com evidências navegáveis",
   parameters: {
     type: "object",
     properties: {
       questionsAsked: { type: "array", items: { type: "string" } },
       leadResponses: { type: "array", items: { type: "string" } },
+      conversationTimeline: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            turnIndex: { type: "number" },
+            speaker: { type: "string" },
+            text: { type: "string" },
+            charStart: { type: "number" },
+            charEnd: { type: "number" },
+          },
+          required: ["turnIndex", "speaker", "text"],
+        },
+      },
+      journeyMap: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            stage: {
+              type: "string",
+              enum: [
+                "abertura","apresentacao","rapport","descoberta","levantamento_necessidades",
+                "apresentacao_solucao","objecoes","tratamento_objecoes","negociacao",
+                "fechamento","proximo_passo","compromisso_assumido","encerramento",
+              ],
+            },
+            position: { type: "string", enum: ["inicio","meio","fim"] },
+            turnRefs: { type: "array", items: { type: "number" } },
+            quote: { type: "string" },
+            charStart: { type: "number" },
+            charEnd: { type: "number" },
+            participants: { type: "array", items: { type: "string" } },
+            explanation: { type: "string" },
+          },
+          required: ["stage","position","quote","explanation"],
+        },
+      },
       objections: {
         type: "array",
         items: {
@@ -62,22 +131,26 @@ const functionDeclaration = {
           properties: {
             id: { type: "string" },
             description: { type: "string" },
-            speaker: { type: "string", description: "Quem fez a objeção (normalmente 'Cliente')" },
-            clientQuote: { type: "string", description: "Trecho LITERAL da conversa onde o cliente fez a objeção" },
-            sdrResponse: { type: "string", description: "Resposta LITERAL do SDR à objeção" },
+            speaker: { type: "string" },
+            clientQuote: { type: "string" },
+            sdrResponse: { type: "string" },
             wasEffective: { type: "boolean" },
-            aiExplanation: { type: "string", description: "Justificativa da IA para ter considerado a objeção contornada ou não" },
-            objectionMessageId: { type: "string", description: "Identificador/índice da mensagem onde a objeção ocorreu (ex: 'msg-14' ou índice)" },
-            responseMessageId: { type: "string", description: "Identificador/índice da mensagem da resposta do SDR" },
-            objectionStart: { type: "number", description: "Offset inicial (caractere) da objeção no texto original, se aplicável" },
+            aiExplanation: { type: "string" },
+            objectionMessageId: { type: "string" },
+            responseMessageId: { type: "string" },
+            objectionStart: { type: "number" },
             objectionEnd: { type: "number" },
             responseStart: { type: "number" },
             responseEnd: { type: "number" },
+            stage: { type: "string" },
+            position: { type: "string", enum: ["inicio","meio","fim"] },
+            turnRefObjection: { type: "number" },
+            turnRefResponse: { type: "number" },
           },
-          required: ["id", "description", "clientQuote", "sdrResponse", "wasEffective", "aiExplanation"],
+          required: ["id","description","clientQuote","sdrResponse","wasEffective","aiExplanation"],
         },
       },
-      result: { type: "string", enum: ["prosseguiu", "recusou", "perdeu_interesse"] },
+      result: { type: "string", enum: ["prosseguiu","recusou","perdeu_interesse"] },
       scores: {
         type: "object",
         properties: {
@@ -91,13 +164,43 @@ const functionDeclaration = {
           contornoObjecoes: { type: "number" },
           comunicacaoOratoria: { type: "number" },
         },
-        required: ["abertura", "rapport", "bant", "dores", "geracaoValor", "conducaoAgendamento", "gatilhoCompromisso", "contornoObjecoes", "comunicacaoOratoria"],
+        required: ["abertura","rapport","bant","dores","geracaoValor","conducaoAgendamento","gatilhoCompromisso","contornoObjecoes","comunicacaoOratoria"],
       },
       aiFeedback: {
         type: "object",
         properties: {
-          pontosFortes: { type: "array", items: { type: "string" } },
-          pontosFracos: { type: "array", items: { type: "string" } },
+          pontosFortes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                titulo: { type: "string" },
+                quote: { type: "string" },
+                stage: { type: "string" },
+                turnRef: { type: "number" },
+                charStart: { type: "number" },
+                charEnd: { type: "number" },
+                justificativa: { type: "string" },
+              },
+              required: ["titulo"],
+            },
+          },
+          pontosFracos: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                titulo: { type: "string" },
+                quote: { type: "string" },
+                stage: { type: "string" },
+                turnRef: { type: "number" },
+                charStart: { type: "number" },
+                charEnd: { type: "number" },
+                justificativa: { type: "string" },
+              },
+              required: ["titulo"],
+            },
+          },
           recomendacoesBant: { type: "array", items: { type: "string" } },
           recomendacoesProcesso: { type: "array", items: { type: "string" } },
           recomendacoesComunicacao: { type: "array", items: { type: "string" } },
@@ -110,15 +213,26 @@ const functionDeclaration = {
                 wasEffective: { type: "boolean" },
                 melhorContorno: { type: "string" },
                 respostaIdeal: { type: "string" },
+                stage: { type: "string" },
+                position: { type: "string", enum: ["inicio","meio","fim"] },
+                clientQuote: { type: "string" },
+                sdrResponse: { type: "string" },
+                turnRefObjection: { type: "number" },
+                turnRefResponse: { type: "number" },
+                charStartObjection: { type: "number" },
+                charEndObjection: { type: "number" },
+                charStartResponse: { type: "number" },
+                charEndResponse: { type: "number" },
+                justificativaTecnica: { type: "string" },
               },
-              required: ["objection", "wasEffective", "melhorContorno", "respostaIdeal"],
+              required: ["objection","wasEffective","melhorContorno","respostaIdeal"],
             },
           },
         },
-        required: ["pontosFortes", "pontosFracos", "recomendacoesBant", "recomendacoesProcesso", "recomendacoesComunicacao", "analiseObjecoes"],
+        required: ["pontosFortes","pontosFracos","recomendacoesBant","recomendacoesProcesso","recomendacoesComunicacao","analiseObjecoes"],
       },
     },
-    required: ["questionsAsked", "leadResponses", "objections", "result", "scores", "aiFeedback"],
+    required: ["questionsAsked","leadResponses","objections","result","scores","aiFeedback"],
   },
 };
 
@@ -163,8 +277,8 @@ serve(async (req) => {
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY não configurada");
 
     const textPart = hasAttachment
-      ? `Analise esta conversa de prospecção (${sanitizedProspectionType}) a partir do arquivo anexado${conversationText ? ` e do texto abaixo:\n\n---\n${conversationText}\n---` : '.'}\n\nExtraia o conteúdo da conversa do arquivo e forneça a avaliação completa chamando analyze_prospection.`
-      : `Analise esta conversa de prospecção (${sanitizedProspectionType}) e forneça a avaliação completa chamando analyze_prospection:\n\n---\n${conversationText}\n---`;
+      ? `Analise esta conversa de prospecção (${sanitizedProspectionType}) a partir do arquivo anexado${conversationText ? ` e do texto abaixo:\n\n---\n${conversationText}\n---` : '.'}\n\nSiga o processo: (1) construir conversationTimeline; (2) construir journeyMap; (3) avaliar. Chame analyze_prospection.`
+      : `Analise esta conversa de prospecção (${sanitizedProspectionType}). Siga o processo: (1) conversationTimeline com offsets; (2) journeyMap; (3) avaliação. Chame analyze_prospection.\n\n---\n${conversationText}\n---`;
 
     const parts: unknown[] = [{ text: textPart }];
     if (hasAttachment) {
@@ -207,7 +321,15 @@ serve(async (req) => {
       throw new Error("Resposta da IA não contém análise válida");
     }
 
-    return new Response(JSON.stringify(fnCall.args), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // Move timeline & journeyMap para dentro de aiFeedback para persistir sem migração
+    const args = fnCall.args as Record<string, unknown>;
+    if (args.aiFeedback && typeof args.aiFeedback === 'object') {
+      const fb = args.aiFeedback as Record<string, unknown>;
+      if (args.conversationTimeline && !fb.conversationTimeline) fb.conversationTimeline = args.conversationTimeline;
+      if (args.journeyMap && !fb.journeyMap) fb.journeyMap = args.journeyMap;
+    }
+
+    return new Response(JSON.stringify(args), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
     console.error("Error in analyze-prospection:", error);
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erro desconhecido" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
