@@ -933,17 +933,29 @@ export default function EvaluationsPage() {
                         <p className="text-muted-foreground text-sm">Nenhuma objeção identificada.</p>
                       ) : (
                         viewingEvaluation.objections.map((obj, idx) => (
-                          <div key={idx} className="p-4 rounded-lg border space-y-2">
+                          <div key={idx} className="p-4 rounded-lg border space-y-3" data-objection-id={obj.objectionMessageId}>
                             <div className="flex items-start justify-between gap-2">
                               <p className="font-medium">"{obj.description}"</p>
                               <Badge variant={obj.wasEffective ? 'default' : 'destructive'}>
                                 {obj.wasEffective ? 'Contornada' : 'Não contornada'}
                               </Badge>
                             </div>
-                            <p className="text-sm text-muted-foreground">
-                              <span className="font-medium text-foreground">Resposta: </span>
-                              {obj.sdrResponse}
-                            </p>
+                            {obj.clientQuote && (
+                              <div className="rounded border-l-2 border-muted-foreground/40 pl-3 py-1">
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground">{obj.speaker || 'Cliente'} disse</p>
+                                <p className="text-sm italic mt-1">"{obj.clientQuote}"</p>
+                              </div>
+                            )}
+                            <div className="rounded border-l-2 border-primary/50 pl-3 py-1">
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Resposta do SDR</p>
+                              <p className="text-sm mt-1">{obj.sdrResponse}</p>
+                            </div>
+                            {obj.aiExplanation && (
+                              <div className="rounded bg-muted/40 border p-3">
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Análise da IA</p>
+                                <p className="text-sm text-muted-foreground">{obj.aiExplanation}</p>
+                              </div>
+                            )}
                           </div>
                         ))
                       )}
