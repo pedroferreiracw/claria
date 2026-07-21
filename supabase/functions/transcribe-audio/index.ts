@@ -1,4 +1,3 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -7,184 +6,106 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Maximum audio size in bytes (25MB - OpenAI Whisper limit)
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
-// Allowed audio MIME types
 const ALLOWED_MIME_TYPES = [
-  'audio/mpeg',
-  'audio/mp3',
-  'audio/wav',
-  'audio/wave',
-  'audio/x-wav',
-  'audio/m4a',
-  'audio/mp4',
-  'audio/x-m4a',
-  'audio/webm',
-  'audio/ogg',
-  'audio/flac',
+  'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/x-wav',
+  'audio/m4a', 'audio/mp4', 'audio/x-m4a', 'audio/webm', 'audio/ogg', 'audio/flac', 'audio/aac',
 ];
 
-// Process base64 in chunks to prevent memory issues
-function processBase64Chunks(base64String: string, chunkSize = 32768): Uint8Array {
-  const chunks: Uint8Array[] = [];
-  let position = 0;
-  
-  while (position < base64String.length) {
-    const chunk = base64String.slice(position, position + chunkSize);
-    const binaryChunk = atob(chunk);
-    const bytes = new Uint8Array(binaryChunk.length);
-    
-    for (let i = 0; i < binaryChunk.length; i++) {
-      bytes[i] = binaryChunk.charCodeAt(i);
-    }
-    
-    chunks.push(bytes);
-    position += chunkSize;
-  }
-
-  const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return result;
+// Gemini accepts a smaller set of audio mime types; normalize.
+function normalizeMime(mt: string): string {
+  const map: Record<string, string> = {
+    'audio/mp3': 'audio/mpeg',
+    'audio/wave': 'audio/wav',
+    'audio/x-wav': 'audio/wav',
+    'audio/x-m4a': 'audio/mp4',
+    'audio/m4a': 'audio/mp4',
+  };
+  return map[mt] || mt;
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    // Authentication check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      console.error('Missing authorization header');
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    
-    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) {
-      console.error('Auth error:', authError?.message || 'No user found');
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    console.log('Authenticated user:', user.id);
-
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY is not configured');
-    }
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY não configurada');
 
     const { audio, mimeType } = await req.json();
-    
-    // Input validation - check audio data exists
+
     if (!audio || typeof audio !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'Dados de áudio não fornecidos' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: 'Dados de áudio não fornecidos' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-
-    // Input validation - check mime type
     if (!mimeType || !ALLOWED_MIME_TYPES.includes(mimeType)) {
-      return new Response(
-        JSON.stringify({ error: 'Formato de áudio inválido. Formatos aceitos: MP3, WAV, M4A, WebM, OGG, FLAC' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: 'Formato de áudio inválido. Formatos aceitos: MP3, WAV, M4A, WebM, OGG, FLAC, AAC' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    console.log('Received audio for transcription, mimeType:', mimeType);
-
-    // Process audio in chunks
-    const binaryAudio = processBase64Chunks(audio);
-    console.log('Audio binary size:', binaryAudio.length);
-
-    // Input validation - check file size
-    if (binaryAudio.length > MAX_AUDIO_SIZE) {
-      return new Response(
-        JSON.stringify({ error: 'Arquivo de áudio muito grande (máximo 25MB)' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Rough size check based on base64 length
+    const approxBytes = Math.floor((audio.length * 3) / 4);
+    if (approxBytes > MAX_AUDIO_SIZE) {
+      return new Response(JSON.stringify({ error: 'Arquivo de áudio muito grande (máximo 25MB)' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    
-    // Determine file extension from mime type
-    const mimeToExt: Record<string, string> = {
-      'audio/mpeg': 'mp3',
-      'audio/mp3': 'mp3',
-      'audio/wav': 'wav',
-      'audio/wave': 'wav',
-      'audio/x-wav': 'wav',
-      'audio/m4a': 'm4a',
-      'audio/mp4': 'm4a',
-      'audio/x-m4a': 'm4a',
-      'audio/webm': 'webm',
-      'audio/ogg': 'ogg',
-      'audio/flac': 'flac',
-    };
-    
-    const ext = mimeToExt[mimeType] || 'mp3';
-    const filename = `audio.${ext}`;
-    
-    // Prepare form data
-    const formData = new FormData();
-    const blob = new Blob([new Uint8Array(binaryAudio)], { type: mimeType });
-    formData.append('file', blob, filename);
-    formData.append('model', 'whisper-1');
-    formData.append('language', 'pt');
 
-    console.log('Sending to Whisper API...');
+    const geminiMime = normalizeMime(mimeType);
 
-    // Send to OpenAI Whisper
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const response = await fetch(geminiUrl, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: formData,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: 'Transcreva este áudio integralmente em português do Brasil. Retorne APENAS o texto transcrito, sem comentários, cabeçalhos, marcações de tempo ou identificação de falantes. Preserve pontuação natural.' },
+            { inline_data: { mime_type: geminiMime, data: audio } },
+          ],
+        }],
+        generationConfig: { temperature: 0 },
+      }),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Whisper API error:', response.status);
-      throw new Error(`Whisper API error: ${response.status}`);
+      const errText = await response.text();
+      console.error('Gemini transcription error:', response.status, errText);
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ error: 'Limite de requisições excedido. Tente novamente em alguns segundos.' }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (response.status === 403) {
+        return new Response(JSON.stringify({ error: 'Chave GEMINI_API_KEY inválida ou sem permissão.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ error: `Erro do Gemini (${response.status}): ${errText.slice(0, 300)}` }), { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const result = await response.json();
-    console.log('Transcription successful, text length:', result.text?.length);
+    const data = await response.json();
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const text = parts.map((p: { text?: string }) => p.text || '').join('').trim();
 
-    return new Response(
-      JSON.stringify({ text: result.text }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    if (!text) {
+      console.error('Transcrição vazia:', JSON.stringify(data).slice(0, 500));
+      throw new Error('Não foi possível transcrever o áudio');
+    }
 
+    return new Response(JSON.stringify({ text }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Transcription error:', errorMessage);
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Transcription error:', msg);
+    return new Response(JSON.stringify({ error: msg }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
