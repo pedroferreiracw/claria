@@ -8,6 +8,7 @@ const corsHeaders = {
 
 const MAX_CONVERSATION_LENGTH = 50000;
 const ALLOWED_PROSPECTION_TYPES = ['WhatsApp', 'Ligação', 'Email', 'Reunião'];
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 const systemPrompt = `Você é um especialista em análise de prospecções comerciais da Cardápio Web, empresa de soluções digitais para restaurantes.
 
@@ -19,265 +20,175 @@ CONTEXTO DA EMPRESA:
 - Metodologia principal: BANT (Budget, Authority, Need, Timeline)
 
 CRITÉRIOS DE AVALIAÇÃO (0-100 cada):
-1. Abertura: Como o SDR iniciou a conversa, captou atenção e se apresentou
-2. Rapport: Construção de conexão e relacionamento com o lead
-3. Aplicação do BANT: Qualificação de Budget, Authority, Need e Timeline
-4. Identificação de Dores: Capacidade de descobrir as dores reais do cliente
-5. Geração de Valor: Apresentação de benefícios e valor da solução
-6. Condução para Agendamento: Habilidade de conduzir para o próximo passo (reunião)
-7. Gatilho de Compromisso: Uso de gatilhos para gerar comprometimento emocional e racional do lead
-8. Contorno de Objeções: Eficácia ao lidar com objeções do lead
-9. Comunicação e Oratória: Clareza, tom de voz, fluidez e habilidades de comunicação
+1. Abertura
+2. Rapport
+3. Aplicação do BANT
+4. Identificação de Dores
+5. Geração de Valor
+6. Condução para Agendamento
+7. Gatilho de Compromisso
+8. Contorno de Objeções
+9. Comunicação e Oratória
 
-PESOS DOS CRITÉRIOS:
-- Peso maior (1.5x): BANT, Identificação de Dores, Condução para Agendamento, Gatilho de Compromisso, Contorno de Objeções
+PESOS:
+- Peso maior (1.5x): BANT, Dores, Condução para Agendamento, Gatilho de Compromisso, Contorno de Objeções
 - Peso normal (1.0x): Abertura, Rapport, Geração de Valor, Comunicação e Oratória
 
-REGRAS DE PONTUAÇÃO:
-- 0-59: Precisa melhorar significativamente
-- 60-79: Atende parcialmente, pode melhorar
-- 80-99: Bom desempenho
-- 100: Excelente, execução perfeita
+Retorne SEMPRE a análise chamando a função analyze_prospection.`;
 
-Analise a conversa e forneça:
-1. Perguntas identificadas que o SDR fez
-2. Respostas principais do lead
-3. Objeções levantadas (com a resposta do SDR e se foi efetiva)
-4. Resultado detectado (prosseguiu para reunião, recusou, ou perdeu interesse)
-5. Notas para cada um dos 9 critérios
-6. Feedback detalhado com pontos fortes, pontos fracos e recomendações`;
+const functionDeclaration = {
+  name: "analyze_prospection",
+  description: "Retorna a análise estruturada da prospecção",
+  parameters: {
+    type: "object",
+    properties: {
+      questionsAsked: { type: "array", items: { type: "string" } },
+      leadResponses: { type: "array", items: { type: "string" } },
+      objections: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            description: { type: "string" },
+            sdrResponse: { type: "string" },
+            wasEffective: { type: "boolean" },
+          },
+          required: ["id", "description", "sdrResponse", "wasEffective"],
+        },
+      },
+      result: { type: "string", enum: ["prosseguiu", "recusou", "perdeu_interesse"] },
+      scores: {
+        type: "object",
+        properties: {
+          abertura: { type: "number" },
+          rapport: { type: "number" },
+          bant: { type: "number" },
+          dores: { type: "number" },
+          geracaoValor: { type: "number" },
+          conducaoAgendamento: { type: "number" },
+          gatilhoCompromisso: { type: "number" },
+          contornoObjecoes: { type: "number" },
+          comunicacaoOratoria: { type: "number" },
+        },
+        required: ["abertura", "rapport", "bant", "dores", "geracaoValor", "conducaoAgendamento", "gatilhoCompromisso", "contornoObjecoes", "comunicacaoOratoria"],
+      },
+      aiFeedback: {
+        type: "object",
+        properties: {
+          pontosFortes: { type: "array", items: { type: "string" } },
+          pontosFracos: { type: "array", items: { type: "string" } },
+          recomendacoesBant: { type: "array", items: { type: "string" } },
+          recomendacoesProcesso: { type: "array", items: { type: "string" } },
+          recomendacoesComunicacao: { type: "array", items: { type: "string" } },
+          analiseObjecoes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                objection: { type: "string" },
+                wasEffective: { type: "boolean" },
+                melhorContorno: { type: "string" },
+                respostaIdeal: { type: "string" },
+              },
+              required: ["objection", "wasEffective", "melhorContorno", "respostaIdeal"],
+            },
+          },
+        },
+        required: ["pontosFortes", "pontosFracos", "recomendacoesBant", "recomendacoesProcesso", "recomendacoesComunicacao", "analiseObjecoes"],
+      },
+    },
+    required: ["questionsAsked", "leadResponses", "objections", "result", "scores", "aiFeedback"],
+  },
+};
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    
-    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const { conversationText, prospectionType, attachment } = await req.json();
-
     const hasAttachment = attachment && typeof attachment === 'object' && attachment.data && attachment.mimeType;
 
     if ((!conversationText || typeof conversationText !== 'string') && !hasAttachment) {
-      return new Response(
-        JSON.stringify({ error: "Texto da conversa ou arquivo é obrigatório" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Texto da conversa ou arquivo é obrigatório" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
     if (conversationText && conversationText.length > MAX_CONVERSATION_LENGTH) {
-      return new Response(
-        JSON.stringify({ error: `Texto da conversa muito longo (máximo ${MAX_CONVERSATION_LENGTH} caracteres)` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: `Texto da conversa muito longo (máximo ${MAX_CONVERSATION_LENGTH} caracteres)` }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
     if (hasAttachment) {
       const allowedMimes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
       if (!allowedMimes.includes(attachment.mimeType)) {
-        return new Response(
-          JSON.stringify({ error: "Formato de arquivo inválido. Use PDF, JPG, JPEG ou PNG." }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "Formato de arquivo inválido. Use PDF, JPG, JPEG ou PNG." }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
 
-    const sanitizedProspectionType = ALLOWED_PROSPECTION_TYPES.includes(prospectionType) 
-      ? prospectionType 
-      : 'WhatsApp';
+    const sanitizedProspectionType = ALLOWED_PROSPECTION_TYPES.includes(prospectionType) ? prospectionType : 'WhatsApp';
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY não configurada");
 
     const textPart = hasAttachment
-      ? `Analise esta conversa de prospecção (${sanitizedProspectionType}) a partir do arquivo anexado${conversationText ? ` e do texto abaixo:\n\n---\n${conversationText}\n---` : '.'}\n\nExtraia o conteúdo da conversa do arquivo (imagem ou PDF) e forneça a avaliação completa. Use a ferramenta analyze_prospection para retornar a análise estruturada.`
-      : `Analise esta conversa de prospecção (${sanitizedProspectionType}) e forneça a avaliação completa:\n\n---\n${conversationText}\n---\n\nUse a ferramenta analyze_prospection para retornar a análise estruturada.`;
+      ? `Analise esta conversa de prospecção (${sanitizedProspectionType}) a partir do arquivo anexado${conversationText ? ` e do texto abaixo:\n\n---\n${conversationText}\n---` : '.'}\n\nExtraia o conteúdo da conversa do arquivo e forneça a avaliação completa chamando analyze_prospection.`
+      : `Analise esta conversa de prospecção (${sanitizedProspectionType}) e forneça a avaliação completa chamando analyze_prospection:\n\n---\n${conversationText}\n---`;
 
-    const userContent: unknown = hasAttachment
-      ? [
-          { type: "text", text: textPart },
-          attachment.mimeType === 'application/pdf'
-            ? { type: "file", file: { filename: attachment.filename || 'conversation.pdf', file_data: `data:${attachment.mimeType};base64,${attachment.data}` } }
-            : { type: "image_url", image_url: { url: `data:${attachment.mimeType};base64,${attachment.data}` } },
-        ]
-      : textPart;
+    const parts: unknown[] = [{ text: textPart }];
+    if (hasAttachment) {
+      parts.push({ inline_data: { mime_type: attachment.mimeType, data: attachment.data } });
+    }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const response = await fetch(geminiUrl, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "analyze_prospection",
-              description: "Retorna a análise estruturada da prospecção",
-              parameters: {
-                type: "object",
-                properties: {
-                  questionsAsked: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "Lista de perguntas que o SDR fez durante a conversa"
-                  },
-                  leadResponses: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "Lista das principais respostas do lead"
-                  },
-                  objections: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        id: { type: "string" },
-                        description: { type: "string", description: "A objeção levantada pelo lead" },
-                        sdrResponse: { type: "string", description: "Como o SDR respondeu à objeção" },
-                        wasEffective: { type: "boolean", description: "Se a resposta foi efetiva em contornar a objeção" }
-                      },
-                      required: ["id", "description", "sdrResponse", "wasEffective"]
-                    },
-                    description: "Lista de objeções identificadas na conversa"
-                  },
-                  result: {
-                    type: "string",
-                    enum: ["prosseguiu", "recusou", "perdeu_interesse"],
-                    description: "Resultado final da prospecção: prosseguiu (agendou reunião), recusou, ou perdeu_interesse"
-                  },
-                  scores: {
-                    type: "object",
-                    properties: {
-                      abertura: { type: "number", description: "Nota 0-100 para abertura da conversa" },
-                      rapport: { type: "number", description: "Nota 0-100 para construção de rapport" },
-                      bant: { type: "number", description: "Nota 0-100 para aplicação do BANT" },
-                      dores: { type: "number", description: "Nota 0-100 para identificação de dores" },
-                      geracaoValor: { type: "number", description: "Nota 0-100 para geração de valor" },
-                      conducaoAgendamento: { type: "number", description: "Nota 0-100 para condução ao agendamento" },
-                      gatilhoCompromisso: { type: "number", description: "Nota 0-100 para uso de gatilhos de compromisso" },
-                      contornoObjecoes: { type: "number", description: "Nota 0-100 para contorno de objeções" },
-                      comunicacaoOratoria: { type: "number", description: "Nota 0-100 para comunicação e oratória" }
-                    },
-                    required: ["abertura", "rapport", "bant", "dores", "geracaoValor", "conducaoAgendamento", "gatilhoCompromisso", "contornoObjecoes", "comunicacaoOratoria"]
-                  },
-                  aiFeedback: {
-                    type: "object",
-                    properties: {
-                      pontosFortes: {
-                        type: "array",
-                        items: { type: "string" },
-                        description: "Lista de pontos fortes identificados no desempenho do SDR"
-                      },
-                      pontosFracos: {
-                        type: "array",
-                        items: { type: "string" },
-                        description: "Lista de pontos fracos a serem melhorados"
-                      },
-                      recomendacoesBant: {
-                        type: "array",
-                        items: { type: "string" },
-                        description: "Recomendações específicas para melhorar qualificação BANT"
-                      },
-                      recomendacoesProcesso: {
-                        type: "array",
-                        items: { type: "string" },
-                        description: "Recomendações gerais para o processo de vendas"
-                      },
-                      recomendacoesComunicacao: {
-                        type: "array",
-                        items: { type: "string" },
-                        description: "Recomendações para melhorar comunicação e oratória"
-                      },
-                      analiseObjecoes: {
-                        type: "array",
-                        items: {
-                          type: "object",
-                          properties: {
-                            objection: { type: "string" },
-                            wasEffective: { type: "boolean" },
-                            melhorContorno: { type: "string", description: "Sugestão de como contornar melhor" },
-                            respostaIdeal: { type: "string", description: "Resposta ideal para esta objeção" }
-                          },
-                          required: ["objection", "wasEffective", "melhorContorno", "respostaIdeal"]
-                        },
-                        description: "Análise detalhada de cada objeção com sugestões de melhoria"
-                      }
-                    },
-                    required: ["pontosFortes", "pontosFracos", "recomendacoesBant", "recomendacoesProcesso", "recomendacoesComunicacao", "analiseObjecoes"]
-                  }
-                },
-                required: ["questionsAsked", "leadResponses", "objections", "result", "scores", "aiFeedback"]
-              }
-            }
-          }
-        ],
-        tool_choice: { type: "function", function: { name: "analyze_prospection" } }
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts }],
+        tools: [{ functionDeclarations: [functionDeclaration] }],
+        toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["analyze_prospection"] } },
       }),
     });
 
     if (!response.ok) {
+      const errText = await response.text();
+      console.error("Gemini API error:", response.status, errText);
       if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Créditos insuficientes. Adicione créditos em Settings > Workspace > Usage." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (response.status === 403) {
+        return new Response(JSON.stringify({ error: "Chave GEMINI_API_KEY inválida ou sem permissão." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      throw new Error(`AI gateway error: ${response.status}`);
+      if (response.status === 400) {
+        return new Response(JSON.stringify({ error: `Requisição inválida para o Gemini: ${errText.slice(0, 300)}` }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw new Error(`Gemini API error ${response.status}: ${errText.slice(0, 300)}`);
     }
 
     const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall || toolCall.function.name !== "analyze_prospection") {
-      throw new Error("Invalid AI response structure");
+    const partsOut = data?.candidates?.[0]?.content?.parts || [];
+    const fnCall = partsOut.find((p: { functionCall?: unknown }) => p.functionCall)?.functionCall;
+    if (!fnCall?.args) {
+      console.error("Resposta sem functionCall:", JSON.stringify(data).slice(0, 500));
+      throw new Error("Resposta da IA não contém análise válida");
     }
 
-    const analysis = JSON.parse(toolCall.function.arguments);
-
-    return new Response(JSON.stringify(analysis), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify(fnCall.args), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
     console.error("Error in analyze-prospection:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Erro desconhecido" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Erro desconhecido" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
