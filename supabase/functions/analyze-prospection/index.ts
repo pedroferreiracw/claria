@@ -35,6 +35,16 @@ PESOS:
 - Peso maior (1.5x): BANT, Dores, Condução para Agendamento, Gatilho de Compromisso, Contorno de Objeções
 - Peso normal (1.0x): Abertura, Rapport, Geração de Valor, Comunicação e Oratória
 
+Para CADA objeção identificada, você DEVE preencher obrigatoriamente:
+- description: resumo curto da objeção;
+- speaker: quem levantou (geralmente "Cliente");
+- clientQuote: trecho LITERAL (copiado da conversa, sem parafrasear) onde o cliente fez a objeção;
+- sdrResponse: trecho LITERAL da resposta do SDR;
+- wasEffective: true se a objeção foi efetivamente contornada, false caso contrário;
+- aiExplanation: justificativa clara (2-4 frases) do PORQUÊ você considerou contornada ou não;
+- objectionMessageId / responseMessageId: identificador da mensagem (ex.: "msg-14") ou índice numérico ("14") das mensagens usadas;
+- objectionStart/objectionEnd/responseStart/responseEnd: offsets de caractere no texto original, quando o input for texto.
+
 Retorne SEMPRE a análise chamando a função analyze_prospection.`;
 
 const functionDeclaration = {
