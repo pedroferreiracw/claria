@@ -321,7 +321,7 @@ export default function EvaluationsPage() {
   const handleCreatePDIFromEvaluation = (evaluation: Evaluation) => {
     const scoreEntries = Object.entries(evaluation.scores) as [keyof Scores, number][];
     const weakest = scoreEntries.reduce((a, b) => a[1] < b[1] ? a : b);
-    const recommendations = evaluation.aiFeedback?.pontosFracos?.slice(0, 2).join('. ') ||
+    const recommendations = evaluation.aiFeedback?.pontosFracos?.slice(0, 2).map(feedbackTitle).join('. ') ||
       `Melhorar performance em ${scoreLabels[weakest[0]]}`;
 
     addDevelopmentPlan.mutate({
