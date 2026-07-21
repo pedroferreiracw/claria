@@ -19,6 +19,15 @@ export interface Objection {
   description: string;
   sdrResponse: string;
   wasEffective: boolean;
+  speaker?: string;
+  clientQuote?: string;
+  aiExplanation?: string;
+  objectionMessageId?: string;
+  responseMessageId?: string;
+  objectionStart?: number;
+  objectionEnd?: number;
+  responseStart?: number;
+  responseEnd?: number;
 }
 
 export interface Scores {
