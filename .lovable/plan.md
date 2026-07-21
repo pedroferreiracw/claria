@@ -1,82 +1,91 @@
-## Diagnóstico
+## Objetivo
 
-O erro `new row violates row-level security policy for table "sdrs"` vem da policy `"Admins can create SDRs"`:
+Adicionar uma camada de evidências navegáveis à análise de prospecção — sem tocar em critérios, pesos, ou notas. A IA passará a estruturar a conversa em uma linha do tempo de eventos (Abertura, Rapport, Descoberta, Objeções, Fechamento, etc.), e todo insight (evento, ponto forte, ponto de melhoria, objeção) apontará para o trecho literal da conversa que o originou. No frontend, clicar em qualquer evidência abre a aba Conversa e destaca o trecho.
 
+## Escopo backend (`supabase/functions/analyze-prospection/index.ts`)
+
+1. **Novo passo do prompt**: antes de avaliar, a IA deve normalizar a conversa em turnos cronológicos numerados (`turn_index`, `speaker`, `text`, `charStart`/`charEnd` no texto original quando disponível). Esse array será retornado como `conversationTimeline`.
+
+2. **Novo campo `journeyMap`** (array de eventos), com schema por evento:
+   - `stage` (enum: `abertura | apresentacao | rapport | descoberta | levantamento_necessidades | apresentacao_solucao | objecoes | tratamento_objecoes | negociacao | fechamento | proximo_passo | compromisso_assumido | encerramento`)
+   - `position` (`inicio | meio | fim`)
+   - `turnRefs` (índices dos turnos)
+   - `quote` (trecho literal)
+   - `charStart` / `charEnd`
+   - `participants` (array)
+   - `explanation` (justificativa da classificação)
+
+3. **Enriquecer `aiFeedback`**:
+   - `pontosFortes` e `pontosFracos` passam de `string[]` para objetos `{ titulo, quote, stage, turnRef, charStart, charEnd, justificativa }`.
+   - `analiseObjecoes[]` ganha `stage`, `position`, `turnRefObjection`, `turnRefResponse`, `charStartObjection/End`, `charStartResponse/End`, `justificativaTecnica` (mantém `objection`, `wasEffective`, `melhorContorno`, `respostaIdeal`).
+
+4. **`objections[]`** já tem offsets e quotes — adicionar `stage` e `position` para consistência com o mapa.
+
+5. Regras no `systemPrompt`: quotes devem ser literais (sem parafrasear); `charStart/End` obrigatórios quando a entrada for texto; para áudio/PDF sem offsets, retornar apenas `turnRef` e `quote`. Manter forçamento de function calling.
+
+6. Nada muda em `scores`, pesos ou `calculateFinalScore`.
+
+## Escopo tipos (`src/types/index.ts`)
+
+- Adicionar `ConversationTurn`, `JourneyStage` (enum), `JourneyEvent`, `FeedbackItem` (o antigo string[] vira `FeedbackItem[]`), estender `Objection` com `stage`/`position`, estender `AIFeedback.analiseObjecoes` com os novos campos.
+- Manter compatibilidade retroativa: parser lê tanto `string` quanto `FeedbackItem` para não quebrar avaliações já salvas em `evaluations.ai_feedback` (JSON).
+
+## Escopo frontend
+
+### Novo componente `src/components/evaluations/ConversationMap.tsx`
+- Timeline horizontal/vertical com chips por etapa, ícone e badge de posição.
+- Cada chip clicável emite `onSelectEvidence({ turnRef, charStart, charEnd, quote })`.
+
+### Novo componente `src/components/evaluations/ConversationViewer.tsx`
+- Renderiza `conversationTimeline` como lista de bolhas (SDR/Cliente).
+- Aceita `highlight` (turnRef ou range de char) e faz scroll + destaque animado (`bg-primary/20` pulsando 1.5s).
+- Fallback: se não houver timeline (avaliações antigas), renderiza o `conversationText` cru com destaque por char offset.
+
+### `src/pages/Evaluations.tsx`
+- Nas abas de preview (após análise) e no drawer de avaliação salva:
+  - Nova aba **"Mapa da Conversa"** (primeira) com `ConversationMap`.
+  - Aba **"Conversa"** existente passa a usar `ConversationViewer`.
+  - Abas Pontos Fortes / Pontos a Melhorar / Objeções: cada item vira card com quote + badge da etapa + botão "Ver na conversa" que:
+    1. troca `activeTab` para `"conversa"`;
+    2. seta `highlightTarget` no `ConversationViewer`.
+- Estado local `highlightTarget` compartilhado entre as abas via `useState`.
+
+### `CloserFeedbackPanel` e fluxo de closer
+- Fora do escopo desta iteração (o pedido é da análise de prospecção SDR). Se aplicável no futuro, replicamos.
+
+## Dados persistidos
+- `evaluations.ai_feedback` já é `Json` → aceita o novo formato sem migração.
+- `conversationTimeline` e `journeyMap` serão salvos dentro de `ai_feedback` (subcampos), evitando alterar o schema. Não há migração de banco.
+
+## Compatibilidade
+- Parser tolerante: se `pontosFortes[i]` for string, converte para `{ titulo: str }` sem quote/stage; UI mostra normalmente e omite o botão "Ver na conversa".
+- Avaliações antigas continuam funcionando sem regressão visual.
+
+## Fora de escopo
+- Critérios, pesos, cálculo da nota final.
+- Prompts de closer, dashboards, gamificação, PDI.
+- Migrações de banco.
+
+## Detalhes técnicos
+
+```text
+Backend flow:
+  input(text|audio|pdf)
+    → Gemini system prompt: (1) build timeline (2) tag stages (3) evaluate
+    → functionDeclaration expanded (journeyMap, conversationTimeline,
+      pontosFortes/Fracos como objetos, analiseObjecoes/objections com stage)
+    → response JSON
+
+Frontend flow:
+  AIAnalysisResult → EvaluationsPage state
+    ├─ ConversationMap (chips por stage) ──click──▶ setHighlight(turnRef|range)
+    ├─ Feedback cards ─────────────────────click──▶ setHighlight + setTab('conversa')
+    └─ ConversationViewer(highlight) → scrollIntoView + pulse
 ```
-INSERT em public.sdrs → WITH CHECK: has_role(auth.uid(), 'admin')
-```
 
-O usuário logado não tem role `admin` em `public.user_roles`, então o RLS bloqueia. O payload do INSERT (`name, squad, role, avatar_url`) está correto — a policy não exige `created_by`/`org_id`. **Nada de código de UI, hooks ou componentes precisa mudar.**
-
-## Situação atual dos 5 e-mails solicitados
-
-Já existem em `auth.users`:
-- antonio.anderson@cardapioweb.com
-- joelma.vieira@cardapioweb.com
-
-Ainda **não** existem em `auth.users` (precisam fazer signup em `/auth` primeiro):
-- pedro.ferreira@cardapioweb.com
-- vithoria.pinheiro@cardapioweb.com
-- ana.clara@cardapioweb.com
-
-## Correção proposta (menor mudança, mantendo segurança)
-
-Uma única migration que:
-
-1. **Concede role `admin`** aos 2 usuários que já existem (INSERT em `public.user_roles` com `ON CONFLICT DO NOTHING`).
-2. **Cria um trigger seguro em `auth.users`** que, quando um usuário do domínio `@cardapioweb.com` é criado ou tem o e-mail confirmado (`email_confirmed_at IS NOT NULL`), concede automaticamente a role `admin`. Isso resolve os 3 e-mails que ainda vão se cadastrar, sem exigir intervenção manual, e segue o padrão seguro (só concede após verificação do e-mail, evitando privilege-escalation via signup de e-mail alheio).
-
-### Arquivo alterado
-
-- **Novo**: `supabase/migrations/<timestamp>_grant_cardapioweb_admin.sql`
-
-### SQL (resumo)
-
-```sql
--- 1) Backfill dos usuários já existentes
-INSERT INTO public.user_roles (user_id, role)
-SELECT id, 'admin'::app_role FROM auth.users
-WHERE email IN (
-  'antonio.anderson@cardapioweb.com',
-  'joelma.vieira@cardapioweb.com',
-  'pedro.ferreira@cardapioweb.com',
-  'vithoria.pinheiro@cardapioweb.com',
-  'ana.clara@cardapioweb.com'
-)
-ON CONFLICT (user_id, role) DO NOTHING;
-
--- 2) Trigger para futuros signups do domínio @cardapioweb.com (só após email verificado)
-CREATE OR REPLACE FUNCTION public.grant_cardapioweb_admin()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NEW.email_confirmed_at IS NOT NULL
-     AND lower(split_part(NEW.email, '@', 2)) = 'cardapioweb.com' THEN
-    INSERT INTO public.user_roles (user_id, role)
-    VALUES (NEW.id, 'admin')
-    ON CONFLICT (user_id, role) DO NOTHING;
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER on_auth_user_created_grant_cw_admin
-AFTER INSERT ON auth.users
-FOR EACH ROW EXECUTE FUNCTION public.grant_cardapioweb_admin();
-
-CREATE TRIGGER on_auth_user_confirmed_grant_cw_admin
-AFTER UPDATE OF email_confirmed_at ON auth.users
-FOR EACH ROW
-WHEN (OLD.email_confirmed_at IS NULL AND NEW.email_confirmed_at IS NOT NULL)
-EXECUTE FUNCTION public.grant_cardapioweb_admin();
-```
-
-## O que NÃO será alterado
-
-- Nenhuma policy RLS (permanecem admin-only para escrita).
-- Nenhum componente React, hook, layout ou UI.
-- Nenhuma outra tabela.
-
-## Observações
-
-- Os 3 e-mails ainda não cadastrados precisam abrir `/auth` e fazer signup; a role `admin` será atribuída automaticamente após confirmarem o e-mail.
-- O usuário `antonio.anderson@cardapioweb.com` teve `invalid_credentials` nos logs — se ele não lembrar a senha, precisa usar "Esqueci minha senha" ou recriar a conta.
+Arquivos alterados:
+- `supabase/functions/analyze-prospection/index.ts` (prompt + schema)
+- `src/types/index.ts` (novos tipos, compat)
+- `src/hooks/useAIAnalysis.ts` (tipagem do retorno)
+- `src/pages/Evaluations.tsx` (nova aba, cards com botão "Ver na conversa")
+- Novos: `src/components/evaluations/ConversationMap.tsx`, `ConversationViewer.tsx`
