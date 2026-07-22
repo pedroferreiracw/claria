@@ -21,6 +21,21 @@ export interface Goal {
 export type PDIStatus = 'pending' | 'in_progress' | 'completed';
 export type PDIPriority = 'high' | 'medium' | 'low';
 
+export interface PDIPlanData {
+  objective: string;
+  whatHappened: string;
+  evidence?: {
+    quote?: string;
+    stage?: string;
+    turnRef?: number;
+    charStart?: number;
+    charEnd?: number;
+  };
+  actions: string[];
+  goal: string;
+  successCriteria: string;
+}
+
 export interface DevelopmentPlan {
   id: string;
   sdrId: string;
@@ -33,6 +48,7 @@ export interface DevelopmentPlan {
   completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  pdi?: PDIPlanData;
 }
 
 export interface BestPractice {
