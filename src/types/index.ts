@@ -113,6 +113,23 @@ export interface ObjectionAnalysis {
   justificativaTecnica?: string;
 }
 
+export interface PDIEvidence {
+  quote?: string;
+  stage?: JourneyStage;
+  turnRef?: number;
+  charStart?: number;
+  charEnd?: number;
+}
+
+export interface PDISuggestion {
+  objective: string;
+  whatHappened: string;
+  evidence?: PDIEvidence;
+  actions: string[];
+  goal: string;
+  successCriteria: string;
+}
+
 export interface AIFeedback {
   pontosFortes: FeedbackItem[];
   pontosFracos: FeedbackItem[];
@@ -122,6 +139,7 @@ export interface AIFeedback {
   analiseObjecoes: ObjectionAnalysis[];
   conversationTimeline?: ConversationTurn[];
   journeyMap?: JourneyEvent[];
+  pdi?: PDISuggestion;
 }
 
 export function feedbackTitle(item: FeedbackItem): string {
