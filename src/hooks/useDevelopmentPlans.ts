@@ -49,7 +49,7 @@ export function useDevelopmentPlans(sdrId?: string) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data as PDIRow[]).map(mapRowToPDI);
+      return (data as unknown as PDIRow[]).map(mapRowToPDI);
     },
   });
 }
