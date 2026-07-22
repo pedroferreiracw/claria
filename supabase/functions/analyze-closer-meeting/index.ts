@@ -145,6 +145,7 @@ Retorne SEMPRE via analyze_closer_meeting.`;
         contents: [{ role: 'user', parts: [{ text: `Analise esta reunião de closer:\n\n${transcription}` }] }],
         tools: [{ functionDeclarations: [functionDeclaration] }],
         toolConfig: { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: ['analyze_closer_meeting'] } },
+        generationConfig: { temperature: 0, topP: 1, topK: 1, candidateCount: 1, seed: 42 },
       }),
     });
 
