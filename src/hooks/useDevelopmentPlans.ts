@@ -15,6 +15,7 @@ interface PDIRow {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  pdi: DevelopmentPlan['pdi'] | null;
 }
 
 const mapRowToPDI = (row: PDIRow): DevelopmentPlan => ({
@@ -29,6 +30,7 @@ const mapRowToPDI = (row: PDIRow): DevelopmentPlan => ({
   completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
   createdAt: new Date(row.created_at),
   updatedAt: new Date(row.updated_at),
+  pdi: row.pdi ?? undefined,
 });
 
 export function useDevelopmentPlans(sdrId?: string) {
