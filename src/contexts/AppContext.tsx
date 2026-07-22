@@ -10,7 +10,7 @@ interface AppContextType {
   addSDR: (sdr: Omit<SDR, 'id' | 'createdAt'>) => void;
   updateSDR: (id: string, data: Partial<SDR>) => void;
   deleteSDR: (id: string) => void;
-  addEvaluation: (evaluation: Omit<Evaluation, 'id' | 'createdAt'>) => void;
+  addEvaluation: (evaluation: Omit<Evaluation, 'id' | 'createdAt'>) => Promise<Evaluation>;
   updateEvaluation: (id: string, data: Partial<Evaluation>) => void;
   deleteEvaluation: (id: string) => void;
 }
@@ -42,7 +42,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addEvaluation = (evaluationData: Omit<Evaluation, 'id' | 'createdAt'>) => {
-    addEvaluationMutation.mutate(evaluationData);
+    return addEvaluationMutation.mutateAsync(evaluationData);
   };
 
   const updateEvaluation = (id: string, data: Partial<Evaluation>) => {

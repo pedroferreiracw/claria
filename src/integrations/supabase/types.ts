@@ -229,6 +229,7 @@ export type Database = {
           due_date: string | null
           evaluation_id: string | null
           id: string
+          pdi: Json | null
           priority: string
           recommendation: string
           sdr_id: string
@@ -242,6 +243,7 @@ export type Database = {
           due_date?: string | null
           evaluation_id?: string | null
           id?: string
+          pdi?: Json | null
           priority: string
           recommendation: string
           sdr_id: string
@@ -255,6 +257,7 @@ export type Database = {
           due_date?: string | null
           evaluation_id?: string | null
           id?: string
+          pdi?: Json | null
           priority?: string
           recommendation?: string
           sdr_id?: string

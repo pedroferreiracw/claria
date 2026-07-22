@@ -15,6 +15,7 @@ interface PDIRow {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  pdi: DevelopmentPlan['pdi'] | null;
 }
 
 const mapRowToPDI = (row: PDIRow): DevelopmentPlan => ({
@@ -29,6 +30,7 @@ const mapRowToPDI = (row: PDIRow): DevelopmentPlan => ({
   completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
   createdAt: new Date(row.created_at),
   updatedAt: new Date(row.updated_at),
+  pdi: row.pdi ?? undefined,
 });
 
 export function useDevelopmentPlans(sdrId?: string) {
@@ -47,7 +49,7 @@ export function useDevelopmentPlans(sdrId?: string) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data as PDIRow[]).map(mapRowToPDI);
+      return (data as unknown as PDIRow[]).map(mapRowToPDI);
     },
   });
 }
@@ -67,6 +69,7 @@ export function useAddDevelopmentPlan() {
           priority: plan.priority,
           status: plan.status,
           due_date: plan.dueDate?.toISOString().split('T')[0] || null,
+          pdi: (plan.pdi ?? null) as never,
         })
         .select()
         .single();
