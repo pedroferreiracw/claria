@@ -290,9 +290,9 @@ export default function EvaluationsPage() {
     // Save evaluation and get saved row (for evaluationId link)
     let savedEval: Evaluation | null = null;
     try {
-      savedEval = await (addEvaluation as unknown as (e: typeof evaluation) => Promise<Evaluation>)(evaluation);
+      savedEval = await addEvaluation(evaluation);
     } catch {
-      // addEvaluation may not return the row via context — fall back silently
+      // ignore, mutation shows its own error toast
     }
 
     // Auto-generate compact PDI from AI output
