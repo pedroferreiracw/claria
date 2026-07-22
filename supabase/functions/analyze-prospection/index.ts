@@ -327,6 +327,7 @@ serve(async (req) => {
         contents: [{ role: "user", parts }],
         tools: [{ functionDeclarations: [functionDeclaration] }],
         toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["analyze_prospection"] } },
+        generationConfig: { temperature: 0, topP: 1, topK: 1, candidateCount: 1, seed: 42 },
       }),
     });
 
