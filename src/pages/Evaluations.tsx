@@ -120,6 +120,22 @@ export default function EvaluationsPage() {
     }
   }, [searchParams]);
 
+  // Open evaluation drawer + highlight from URL (?openEval=<id>&turnRef=<n>&quote=<...>)
+  useEffect(() => {
+    const openId = searchParams.get('openEval');
+    if (!openId || allEvaluations.length === 0) return;
+    const ev = allEvaluations.find(e => e.id === openId);
+    if (!ev) return;
+    setViewingEvaluation(ev);
+    const turnRefStr = searchParams.get('turnRef');
+    const quote = searchParams.get('quote') || undefined;
+    const turnRef = turnRefStr ? Number(turnRefStr) : undefined;
+    if (turnRef !== undefined || quote) {
+      setViewHighlight({ turnRef, quote, key: Date.now() });
+      setViewTab('conversation');
+    }
+  }, [searchParams, allEvaluations]);
+
   // Filter evaluations
   const filteredEvaluations = useMemo(() => {
     return allEvaluations.filter(e => {
