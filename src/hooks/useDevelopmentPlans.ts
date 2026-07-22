@@ -69,6 +69,7 @@ export function useAddDevelopmentPlan() {
           priority: plan.priority,
           status: plan.status,
           due_date: plan.dueDate?.toISOString().split('T')[0] || null,
+          pdi: (plan.pdi ?? null) as never,
         })
         .select()
         .single();
