@@ -1,0 +1,1 @@
+ALTER TABLE public.development_plans ADD COLUMN IF NOT EXISTS pdi jsonb;

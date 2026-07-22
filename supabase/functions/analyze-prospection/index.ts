@@ -73,9 +73,20 @@ Em "aiFeedback":
     charStartObjection, charEndObjection, charStartResponse, charEndResponse,
     justificativaTecnica
 
+PASSO 4 — PDI COMPACTO
+Em "aiFeedback.pdi", gere um Plano de Desenvolvimento Individual EXECUTÁVEL, para um feedback rápido de 10-15 minutos.
+Formato OBRIGATÓRIO (curto, direto, específico a ESTA prospecção):
+- objective: UMA única competência prioritária a desenvolver (ex: "Aplicação do BANT"). Escolha a área mais crítica identificada.
+- whatHappened: resumo em NO MÁXIMO 3 linhas do principal erro observado (não genérico — cite o que aconteceu).
+- evidence: { quote (trecho LITERAL da conversa que originou o feedback), stage, turnRef, charStart, charEnd } — obrigatório usar dados da timeline/journeyMap.
+- actions: NO MÁXIMO 3 ações práticas e específicas que o SDR deve executar nas próximas prospecções (frases curtas, imperativas).
+- goal: UMA meta objetiva e mensurável (ex: "Aplicar BANT completo em pelo menos 8 das próximas 10 prospecções").
+- successCriteria: indicador claro de evolução (ex: "Nota de Aplicação do BANT maior que 80").
+
 Regras:
 - Quotes SEMPRE literais. Nunca parafraseie o cliente ou o SDR.
 - Se não houver evidência, NÃO invente. Omita o item.
+- PDI deve ser curto e caber em uma única tela — sem textos longos.
 - Retorne SEMPRE a análise chamando a função analyze_prospection.`;
 
 const functionDeclaration = {
