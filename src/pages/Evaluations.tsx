@@ -269,7 +269,7 @@ export default function EvaluationsPage() {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!analysisResult) return;
     const finalScore = calculateFinalScore(analysisResult.scores);
 
@@ -287,23 +287,31 @@ export default function EvaluationsPage() {
       aiFeedback: analysisResult.aiFeedback,
     };
 
-    addEvaluation(evaluation);
+    // Save evaluation and get saved row (for evaluationId link)
+    let savedEval: Evaluation | null = null;
+    try {
+      savedEval = await (addEvaluation as unknown as (e: typeof evaluation) => Promise<Evaluation>)(evaluation);
+    } catch {
+      // addEvaluation may not return the row via context — fall back silently
+    }
 
-    // Check for weak areas and suggest PDI
-    const scoreEntries = Object.entries(analysisResult.scores) as [keyof Scores, number][];
-    const weakAreas = scoreEntries.filter(([, score]) => score < 60);
-    if (weakAreas.length > 0) {
-      const weakest = weakAreas.reduce((a, b) => a[1] < b[1] ? a : b);
-      toast.info(
-        `Área fraca identificada: ${scoreLabels[weakest[0]]}. Considere criar um PDI.`,
-        {
-          duration: 5000,
-          action: {
-            label: 'Criar PDI',
-            onClick: () => navigate('/development'),
-          },
-        }
-      );
+    // Auto-generate compact PDI from AI output
+    const pdi = analysisResult.aiFeedback?.pdi;
+    if (pdi && pdi.objective) {
+      const scoreEntries = Object.entries(analysisResult.scores) as [keyof Scores, number][];
+      const weakest = scoreEntries.reduce((a, b) => a[1] < b[1] ? a : b);
+      addDevelopmentPlan.mutate({
+        sdrId,
+        evaluationId: savedEval?.id,
+        weakArea: pdi.objective,
+        recommendation: pdi.whatHappened,
+        priority: weakest[1] < 50 ? 'high' : weakest[1] < 70 ? 'medium' : 'low',
+        status: 'pending',
+        pdi,
+      });
+      toast.success('PDI gerado automaticamente!', {
+        action: { label: 'Ver PDI', onClick: () => navigate('/development') },
+      });
     }
 
     toast.success('Avaliação salva com sucesso!');
