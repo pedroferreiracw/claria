@@ -42,7 +42,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addEvaluation = (evaluationData: Omit<Evaluation, 'id' | 'createdAt'>) => {
-    addEvaluationMutation.mutate(evaluationData);
+    return addEvaluationMutation.mutateAsync(evaluationData);
   };
 
   const updateEvaluation = (id: string, data: Partial<Evaluation>) => {
